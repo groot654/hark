@@ -7,6 +7,9 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import keyboard
+import numpy as np
+
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon, QPainter, QPixmap, QColor
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
@@ -19,11 +22,13 @@ from hark.app.hotkeys import HotkeyConfig, Hotkeys
 from hark.app.hud import Card, Hud, HudState
 from hark.app.look import get_look
 from hark.app.settings_store import Settings
+from hark.app.teleprompter import Teleprompter
 from hark.app.vad import SileroVad
 
 log = logging.getLogger("hark.client")
 
 MIN_HOLD_SECONDS = 0.25
+PROMPTER_SPEECH_THRESHOLD = 0.5
 
 
 class _Bridge(QObject):
@@ -37,6 +42,7 @@ class _Bridge(QObject):
     failure = Signal(str)
     engine_event = Signal(dict)
     focus = Signal(dict)
+    prompter_close = Signal()
 
 
 class HarkApp:
@@ -52,7 +58,12 @@ class HarkApp:
         self.hud = Hud(get_look(self.settings.look))
         self.hud.clicked.connect(self._on_hud_clicked)
 
-        self.recorder = Recorder(device=self.settings.microphone or None, on_level=self.bridge.level.emit)
+        self.prompter: Teleprompter | None = None
+        self._prompter_vad = SileroVad()  # its own instance: the push-to-talk gate resets shared state
+        self._prompter_vad_loading = False
+        self._esc_hook = None
+        self.recorder = Recorder(device=self.settings.microphone or None, on_level=self.bridge.level.emit,
+                                 on_frame=self._on_audio_frame)
         self._mode: str | None = None
         self._pressed_at = 0.0
         self._target: win_foreground.Target | None = None
@@ -67,6 +78,7 @@ class HarkApp:
         b.failure.connect(self._on_failure)
         b.engine_event.connect(self._on_engine_event)
         b.focus.connect(self._apply_focus)
+        b.prompter_close.connect(self._stop_prompter)
 
         self.hotkeys = Hotkeys(
             HotkeyConfig(
@@ -103,8 +115,10 @@ class HarkApp:
         self.tray = QSystemTrayIcon(QIcon(pix), self.qt)
         self.tray.setToolTip(f"{DISPLAY_NAME} — hold {self.settings.ptt_key} to talk")
         menu = QMenu()
+        prompter_action = QAction("Teleprompter (copied script)", menu, triggered=self._start_prompter)
         settings_action = QAction("Settings…", menu, triggered=self._open_settings)
         quit_action = QAction(f"Quit {DISPLAY_NAME}", menu, triggered=self.quit)
+        menu.addAction(prompter_action)
         menu.addAction(settings_action)
         menu.addSeparator()
         menu.addAction(quit_action)
@@ -118,8 +132,11 @@ class HarkApp:
         dialog = SettingsDialog(self.settings)
         if dialog.exec():
             self.hud.apply_look(get_look(self.settings.look))
+            if self.prompter:
+                self.prompter.apply_look(get_look(self.settings.look))
 
     def quit(self) -> None:
+        self._stop_prompter()
         self.hotkeys.stop()
         self.recorder.close()
         self.qt.quit()
@@ -195,6 +212,8 @@ class HarkApp:
             self.hud.react(action.get("mood", ""))
         elif kind == "focus":
             self._apply_focus(action)
+        elif kind == "teleprompter":
+            self._start_prompter() if action.get("action") == "start" else self._stop_prompter()
 
     def _apply_focus(self, focus: dict) -> None:
         minutes = focus.get("minutes")
@@ -227,6 +246,47 @@ class HarkApp:
     def _on_hud_clicked(self) -> None:
         if self.hud.state in (HudState.REPLY, HudState.ERROR):
             self.hud.rest()
+        elif self.prompter:
+            self.prompter.toggle_pause()
+
+    # ---- teleprompter ------------------------------------------------------------
+    def _start_prompter(self) -> None:
+        script = self.qt.clipboard().text().strip()
+        if not script:
+            self.hud.show_card(Card(title="Teleprompter", body="Copy your script, then say “start teleprompter” again."),
+                               dismiss_ms=4200)
+            return
+        self._stop_prompter()
+        if not self._prompter_vad_loading:
+            self._prompter_vad_loading = True
+            threading.Thread(target=self._prompter_vad.load, name="prompter-vad", daemon=True).start()
+        self._prompter_vad.reset()
+        self.prompter = Teleprompter(script, get_look(self.settings.look))
+        self.prompter.closed.connect(self._on_prompter_closed)
+        self.prompter.start()
+        self._esc_hook = keyboard.add_hotkey("esc", self.bridge.prompter_close.emit, suppress=False)
+        log.info("teleprompter started: %d words", self.prompter.pacer.total)
+
+    def _stop_prompter(self) -> None:
+        if self.prompter is not None:
+            self.prompter.close()  # emits closed -> _on_prompter_closed
+
+    def _on_prompter_closed(self) -> None:
+        if self._esc_hook is not None:
+            keyboard.remove_hotkey(self._esc_hook)
+            self._esc_hook = None
+        if self.prompter is not None:
+            log.info("teleprompter closed at %d%%", round(self.prompter.pacer.progress * 100))
+            self.prompter.deleteLater()
+        self.prompter = None
+
+    def _on_audio_frame(self, block: np.ndarray) -> None:
+        """Audio thread: tell the teleprompter when it hears speech (not while push-to-talk records)."""
+        prompter = self.prompter
+        if prompter is None or self.recorder.recording:
+            return
+        if self._prompter_vad.frame_prob(block) >= PROMPTER_SPEECH_THRESHOLD:
+            prompter.mark_speech()
 
     def _show_panel(self) -> None:
         def fetch() -> None:

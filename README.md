@@ -18,6 +18,10 @@ app in front, or answers. Speech recognition runs on your PC; nothing is sent to
   commands phrased in ways the grammar doesn't cover. Questions about you ("what's my name?") are answered
   straight from what you've asked Hark to remember.
 - **Notch HUD**: a small bar with animated eyes at the top of the screen that shows listening, thinking and results.
+  The eyes react (heart eyes when thanked, a happy squint when something's done, a puzzled look when not), and
+  a running focus session shows as a countdown.
+- **Teleprompter**: copy a script and say "start teleprompter". It scrolls just below the notch while you speak,
+  holds when you pause, and is hidden from screen recording and sharing. Click to pause, scroll to nudge, Esc to close.
 
 ## Requirements
 
