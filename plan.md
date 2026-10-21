@@ -180,7 +180,22 @@ keeps your data. Bugs found by these tests and fixed:
 **Tests.** Install on this PC, launch from the Start menu, check autostart after sign-in, uninstall
 cleanly (your data in `%LOCALAPPDATA%\hark` is kept unless you choose to remove it).
 
-## 7. Choosing a larger AI model `[ ]` (small)
+## 7. Choosing a larger AI model `[x]` (small)
+
+**Result.** Done: Settings → Privacy & AI → Built-in model size (or `hark --model medium`). Scored on the
+same 23 cases (commands the grammar doesn't catch, factual questions, writing, rewriting, multi-step plans,
+polished dictation), all tools stubbed, on this PC:
+
+| Size | Score | Median reply | Slowest | Notes |
+|---|---|---|---|---|
+| Small (0.8B) | 18/23 | 0.39 s | 1.0 s | says Sydney is Australia's capital; plans are just a focus timer |
+| Medium (2B) | 20/23 | 0.69 s | 2.2 s | all commands and questions right; plans sensible but over-eager (adds a focus timer) |
+| Large (4B) | 21/23 (22 in substance: "That is sixty" was marked wrong) | 1.30 s | 4.0 s | the only one that fixes "Me and him goes…" grammar; needs ~3.5 GB free |
+
+Recommendation: **Medium** for this PC. It fixes the wrong answers and weak commands at under a second,
+and fits in the 1–3 GB of memory usually free here. Large is best when memory allows. The default stays
+Small (fastest, smallest download) until you choose. The Medium and Large files (1.3 GB + 2.7 GB) were
+downloaded for this test and are in `%LOCALAPPDATA%\hark\models\llm`; delete whichever you won't use.
 
 **Plan.** Settings → AI model size:
 
