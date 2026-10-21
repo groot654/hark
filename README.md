@@ -23,6 +23,8 @@ app in front, or answers. Speech recognition runs on your PC; nothing is sent to
 - **Notch HUD**: a small bar with animated eyes at the top of the screen that shows listening, thinking and results.
   The eyes react (heart eyes when thanked, a happy squint when something's done, a puzzled look when not), and
   a running focus session shows as a countdown.
+- **Panel** (F9, or click the notch): type to Hark instead of speaking, read past conversations and pick one up
+  again. **System Check** in the tray menu shows what's working and how to fix what isn't.
 - **Teleprompter**: copy a script and say "start teleprompter". It scrolls just below the notch while you speak,
   holds when you pause, and is hidden from screen recording and sharing. Click to pause, scroll to nudge, Esc to close.
 
@@ -52,7 +54,7 @@ instead, pick "Ollama or another server" under Settings → Privacy & AI, or run
 | --- | --- |
 | Hold Right Ctrl | Command |
 | Hold Right Alt | Dictation |
-| F9 | Panel |
+| F9 | Panel (chat and history) |
 
 ## Use Hark from Claude and other AI tools (MCP)
 

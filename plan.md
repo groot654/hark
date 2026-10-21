@@ -122,7 +122,18 @@ reminders, log habits, start a focus timer, show a message on the notch ("Build 
 **Tests.** Allow-list and endpoint tests; a real round trip with an MCP client (list tools, add a to-do,
 see it in Hark).
 
-## 5. The bigger panel `[ ]` (large)
+## 5. The bigger panel `[x]` (large)
+
+**Result.** Done. F9, a click on the resting notch, or a left-click on the tray icon opens the panel.
+- **Chat**: type commands or questions; replies, confirmations ("yes"/"no") and actions work as with voice;
+  text Hark writes goes into the app you were in.
+- **History**: every exchange is now kept (not dictation, not background speech) and grouped into
+  conversations (a new one after 10 minutes of quiet, or "＋ New"); pick one to read and continue it. The
+  "keep history for N days" setting is now applied at startup (0 keeps it forever).
+- **System Check** (tray): microphone, hotkeys, hands-free, speech model, AI model, disk space, memory, each
+  with a fix when something's wrong. On this PC it flags memory: about 0.7 GB free when checked.
+- Checked in the real app: typed commands, a typed "no" to a confirmation, history, new and reopened
+  conversations; on the real screen the panel takes keyboard focus straight away.
 
 **Goal.** F9 (or a click on the notch) opens a drawer under the notch, as in heynixi:
 - **Chat** tab: type a question or command ("Ask Hark…") and see the conversation.

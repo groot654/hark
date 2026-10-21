@@ -7,10 +7,12 @@ import atexit
 import json
 import logging
 import socket
+import shutil
 import threading
 import time
 from contextlib import asynccontextmanager
 
+import psutil
 import uvicorn
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -31,7 +33,7 @@ from hark.engine.security import TokenGuard, issue_token
 from hark.engine.store.sqlite_store import Store
 from hark.engine.tools.app_index import AppIndex
 from hark.engine.tools.registry import focus_action
-from hark.paths import db_path, port_file
+from hark.paths import data_dir, db_path, port_file
 
 log = logging.getLogger("hark.engine")
 
@@ -42,6 +44,7 @@ class ChatRequest(BaseModel):
     text: str
     target: dict = {}
     selection: str | None = None
+    conversation_id: int | None = None  # continue this conversation (from the History tab)
 
 
 class ConfirmRequest(BaseModel):
@@ -75,7 +78,8 @@ class PolishRequest(BaseModel):
 
 class Engine:
     def __init__(self, stt_backend: str = "parakeet", llm_mode: str = "builtin", llm_url: str = "",
-                 llm_model: str = "") -> None:
+                 llm_model: str = "", history_days: int = 30) -> None:
+        self.history_days = history_days
         self.bus = EventBus()
         self.store = Store(db_path())
         self.llm = LLMClient()
@@ -92,6 +96,8 @@ class Engine:
         self.started = time.time()
 
     def warm_up(self) -> None:
+        if self.history_days > 0:  # 0 keeps history forever
+            self.store.prune_history(self.history_days)
         self.stt.load_async()
         self.apps.refresh_async()
         threading.Thread(target=self._connect_llm, name="llm-start", daemon=True).start()
@@ -124,6 +130,39 @@ class Engine:
                           max_tokens=1, timeout=60)
         except LLMUnavailable:
             log.warning("model warm-up failed")
+
+    def system_check(self) -> list[dict]:
+        """The engine's half of System Check: speech model, AI model, disk space, memory."""
+        items = []
+        if self.stt.error:
+            items.append(check("Speech recognition", "error", self.stt.error,
+                               "Restart Hark. If it keeps failing, try the other speech model in Settings."))
+        elif self.stt.ready.is_set():
+            items.append(check("Speech recognition", "ok", f"Ready ({self.stt.backend})."))
+        else:
+            items.append(check("Speech recognition", "warn", "Still loading (the first start downloads ~640 MB)."))
+
+        builtin = self.local_model.status() if self.local_model else None
+        if self.llm_mode == "off":
+            items.append(check("AI model", "ok", "Off: commands work, chat and writing don't."))
+        elif self.llm.available():
+            items.append(check("AI model", "ok", f"Ready ({self.llm.config.model or 'local model'})."))
+        elif builtin and builtin["state"] == "downloading":
+            items.append(check("AI model", "warn", f"Downloading: {round(builtin['progress'] * 100)}%."))
+        elif builtin and builtin["state"] == "error":
+            items.append(check("AI model", "error", builtin["error"] or "Couldn't start.",
+                               "Restart Hark, or pick Ollama or Off under Settings → Privacy & AI."))
+        else:
+            items.append(check("AI model", "warn", "Not running yet.",
+                               "It starts by itself; with the external option, check Ollama is running."))
+
+        free_gb = shutil.disk_usage(data_dir()).free / 1e9
+        items.append(check("Disk space", "ok" if free_gb >= 2 else "warn", f"{free_gb:.1f} GB free.",
+                           None if free_gb >= 2 else "Models and history need a little room; free some space."))
+        mem_gb = psutil.virtual_memory().available / 1e9
+        items.append(check("Memory", "ok" if mem_gb >= 1.5 else "warn", f"{mem_gb:.1f} GB free.",
+                           None if mem_gb >= 1.5 else "The AI model may be slow. Closing a few apps helps."))
+        return items
 
     def _focus_status(self) -> str:
         focus = self.store.active_focus()
@@ -211,7 +250,26 @@ class Engine:
 
         @app.post("/v1/chat", dependencies=[guard])
         def chat(req: ChatRequest) -> dict:
-            return {"transcript": req.text, **self.orchestrator.handle(req.text, req.target, req.selection)}
+            if req.conversation_id:
+                self.orchestrator.continue_conversation(req.conversation_id)
+            out = self.orchestrator.handle(req.text, req.target, req.selection)
+            return {"transcript": req.text, "conversation_id": self.orchestrator.conversation_id(), **out}
+
+        @app.get("/v1/history", dependencies=[guard])
+        def history() -> dict:
+            return {"conversations": self.store.conversations()}
+
+        @app.get("/v1/history/{conversation_id}", dependencies=[guard])
+        def history_conversation(conversation_id: int) -> dict:
+            return {"id": conversation_id, "messages": self.store.conversation_messages(conversation_id)}
+
+        @app.post("/v1/history/new", dependencies=[guard])
+        def history_new() -> dict:
+            return {"id": self.orchestrator.new_conversation()}
+
+        @app.get("/v1/system/check", dependencies=[guard])
+        def system_check() -> dict:
+            return {"items": self.system_check()}
 
         @app.post("/v1/confirm", dependencies=[guard])
         def confirm(req: ConfirmRequest) -> dict:
@@ -259,6 +317,11 @@ class Engine:
         return app
 
 
+def check(name: str, status: str, detail: str, fix: str | None = None) -> dict:
+    """One System Check line: status is ok | warn | error."""
+    return {"name": name, "status": status, "detail": detail, "fix": fix}
+
+
 def _free_port(preferred: int) -> int:
     with socket.socket() as s:
         try:
@@ -270,9 +333,9 @@ def _free_port(preferred: int) -> int:
 
 
 def start_in_thread(stt_backend: str = "parakeet", port: int = DEFAULT_PORT, llm_mode: str = "builtin",
-                    llm_url: str = "", llm_model: str = "") -> tuple[Engine, int]:
+                    llm_url: str = "", llm_model: str = "", history_days: int = 30) -> tuple[Engine, int]:
     """Run the engine on a daemon thread; returns once it accepts connections."""
-    engine = Engine(stt_backend, llm_mode, llm_url, llm_model)
+    engine = Engine(stt_backend, llm_mode, llm_url, llm_model, history_days)
     atexit.register(engine.shutdown)
     port = _free_port(port)
     server = uvicorn.Server(uvicorn.Config(engine.build_app(), host="127.0.0.1", port=port, log_level="warning"))

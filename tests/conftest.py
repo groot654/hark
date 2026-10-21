@@ -25,6 +25,13 @@ class FakeLLM:
         self.replies = [json.dumps(r) if isinstance(r, dict) else r for r in replies]
         self.calls: list[list[dict]] = []
 
+    class config:  # noqa: N801  (mirrors LLMClient.config)
+        model = "fake"
+        base_url = ""
+
+    def available(self) -> bool:
+        return bool(self.replies)
+
     def chat(self, messages, **_kwargs) -> str:
         self.calls.append(messages)
         if not self.replies:

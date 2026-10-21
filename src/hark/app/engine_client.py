@@ -35,8 +35,10 @@ class EngineClient:
         resp.raise_for_status()
         return resp.json()
 
-    def chat(self, text: str, target: dict | None = None, selection: str | None = None) -> dict:
-        resp = self._http.post("/v1/chat", json={"text": text, "target": target or {}, "selection": selection})
+    def chat(self, text: str, target: dict | None = None, selection: str | None = None,
+             conversation_id: int | None = None) -> dict:
+        resp = self._http.post("/v1/chat", json={"text": text, "target": target or {}, "selection": selection,
+                                                 "conversation_id": conversation_id})
         resp.raise_for_status()
         return resp.json()
 

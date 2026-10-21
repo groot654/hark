@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import ctypes
 import logging
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 import keyboard
 import numpy as np
+import sounddevice as sd
 
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon, QPainter, QPixmap, QColor
@@ -21,6 +24,7 @@ from hark.app.engine_client import EngineClient
 from hark.app.hotkeys import HotkeyConfig, Hotkeys
 from hark.app.hud import Card, Hud, HudState
 from hark.app.look import get_look
+from hark.app.panel import Panel
 from hark.app.pointer import Pointer
 from hark.app.settings_store import Settings
 from hark.app.teleprompter import Teleprompter
@@ -49,6 +53,9 @@ class _Bridge(QObject):
     wake_burst = Signal(object)
     wake_result = Signal(dict)
     session_done = Signal(str)
+    panel_reply = Signal(dict)
+    panel_history = Signal(list)
+    panel_conversation = Signal(dict)
 
 
 class HarkApp:
@@ -63,6 +70,10 @@ class HarkApp:
 
         self.hud = Hud(get_look(self.settings.look))
         self.hud.clicked.connect(self._on_hud_clicked)
+        self.panel = Panel(get_look(self.settings.look))
+        self._panel_target: win_foreground.Target | None = None
+        self._panel_conversation: int | None = None
+        self._system_check = None
 
         self.prompter: Teleprompter | None = None
         self._prompter_vad = SileroVad()  # its own instance: the push-to-talk gate resets shared state
@@ -100,6 +111,13 @@ class HarkApp:
         b.wake_burst.connect(self._on_wake_burst)
         b.wake_result.connect(self._on_wake_result)
         b.session_done.connect(self._end_wake_session)
+        b.panel_reply.connect(self._on_panel_reply)
+        b.panel_history.connect(self.panel.set_conversations)
+        b.panel_conversation.connect(self._on_panel_conversation)
+        self.panel.submitted.connect(self._panel_submit)
+        self.panel.new_conversation.connect(self._panel_new)
+        self.panel.conversation_chosen.connect(self._panel_choose)
+        self.panel.history_requested.connect(self._panel_history)
 
         self.hotkeys = Hotkeys(
             HotkeyConfig(
@@ -137,18 +155,25 @@ class HarkApp:
         self.tray = QSystemTrayIcon(QIcon(pix), self.qt)
         self.tray.setToolTip(f"{DISPLAY_NAME} — hold {self.settings.ptt_key} to talk")
         menu = QMenu()
+        open_action = QAction(f"Open {DISPLAY_NAME}", menu, triggered=self._open_panel)
+        check_action = QAction("System Check…", menu, triggered=self._open_system_check)
         prompter_action = QAction("Teleprompter (copied script)", menu, triggered=self._start_prompter)
         self._wake_action = QAction("Listen for “Hey Hark”", menu, checkable=True)
         self._wake_action.setChecked(bool(self.settings.get("wake/enabled")))
         self._wake_action.toggled.connect(self._toggle_wake)
         settings_action = QAction("Settings…", menu, triggered=self._open_settings)
         quit_action = QAction(f"Quit {DISPLAY_NAME}", menu, triggered=self.quit)
+        menu.addAction(open_action)
+        menu.addSeparator()
         menu.addAction(self._wake_action)
         menu.addAction(prompter_action)
         menu.addAction(settings_action)
+        menu.addAction(check_action)
         menu.addSeparator()
         menu.addAction(quit_action)
         self.tray.setContextMenu(menu)
+        self.tray.activated.connect(
+            lambda reason: self._open_panel() if reason == QSystemTrayIcon.ActivationReason.Trigger else None)
         self.tray.show()
         self._tray_menu = menu
 
@@ -160,6 +185,7 @@ class HarkApp:
             self.hud.apply_look(get_look(self.settings.look))
             if self.prompter:
                 self.prompter.apply_look(get_look(self.settings.look))
+            self.panel.apply_look(get_look(self.settings.look))
             self._wake_action.blockSignals(True)
             self._wake_action.setChecked(bool(self.settings.get("wake/enabled")))
             self._wake_action.blockSignals(False)
@@ -243,6 +269,7 @@ class HarkApp:
         elif kind == "look":
             self.settings.look = action["look"]
             self.hud.apply_look(get_look(self.settings.look))
+            self.panel.apply_look(get_look(self.settings.look))
         elif kind == "point":
             Pointer(action["rect"], self.hud.look.accent, action.get("duration_ms", 1200))
         elif kind == "mood":
@@ -289,6 +316,8 @@ class HarkApp:
             self.hud.rest()
         elif self.prompter:
             self.prompter.toggle_pause()
+        elif self.hud.state == HudState.REST:
+            self._open_panel()
 
     # ---- teleprompter ------------------------------------------------------------
     def _start_prompter(self) -> None:
@@ -441,15 +470,129 @@ class HarkApp:
             return
         self._finish_recording("command")
 
+    # ---- panel (chat and history) -----------------------------------------------------
     def _show_panel(self) -> None:
-        def fetch() -> None:
-            try:
-                data = self.engine.get("/v1/productivity/summary")
-                self.bridge.result.emit({"card": data["card"]})
-            except Exception as exc:
-                self.bridge.failure.emit(str(exc))
+        """F9: open the panel, or close it if it's open."""
+        if self.panel.isVisible():
+            self.panel.hide()
+        else:
+            self._open_panel()
 
-        self.pool.submit(fetch)
+    def _open_panel(self) -> None:
+        target = win_foreground.capture()
+        if target is not None and target.pid != os.getpid():
+            self._panel_target = target  # where typed commands act ("click send", "write …")
+        self.panel.open()
+        win_foreground.suppress_menu_activation()  # lets Windows hand keyboard focus to the panel
+        ctypes.windll.user32.SetForegroundWindow(int(self.panel.winId()))
+        self.pool.submit(self._load_recent_conversation)
+
+    def _load_recent_conversation(self) -> None:
+        """Show the conversation in progress, if there was one in the last few minutes."""
+        try:
+            conversations = self.engine.get("/v1/history")["conversations"]
+            recent = conversations[0] if conversations and time.time() - conversations[0]["updated_at"] < 600 else None
+            data = self.engine.get(f"/v1/history/{recent['id']}") if recent else {"id": None, "messages": []}
+            self.bridge.panel_conversation.emit(data)
+        except Exception:
+            log.exception("could not load the conversation")
+
+    def _on_panel_conversation(self, data: dict) -> None:
+        self._panel_conversation = data.get("id")
+        self.panel.set_messages(data.get("messages", []))
+
+    def _panel_submit(self, text: str) -> None:
+        target, conversation = self._panel_target, self._panel_conversation
+
+        def send() -> None:
+            try:
+                result = self.engine.chat(text, target_info(target), conversation_id=conversation)
+            except Exception as exc:
+                log.exception("panel request failed")
+                result = {"status": "error", "say": f"Hark's engine didn't answer ({exc}).", "client_actions": []}
+            result["_target"] = target
+            self.bridge.panel_reply.emit(result)
+
+        self.pool.submit(send)
+
+    def _on_panel_reply(self, result: dict) -> None:
+        self.panel.set_busy(False)
+        self._panel_conversation = result.get("conversation_id") or self._panel_conversation
+        self._pending_confirm = result.get("confirm_id")
+        actions = result.get("client_actions", [])
+        writes = any(a.get("type") == "insert_text" for a in actions)
+        reply = result.get("say") or ("(Wrote it into the app.)" if writes else
+                                      "Done." if result.get("status") == "ok" else "That didn't work.")
+        self.panel.add_message("assistant", reply)
+        if writes:
+            self.panel.hide()  # give focus back to the app the text goes into
+        for action in actions:
+            self._run_client_action(action, result.get("_target"))
+
+    def _panel_new(self) -> None:
+        def new() -> None:
+            try:
+                self.bridge.panel_conversation.emit({"id": self.engine.post("/v1/history/new", {})["id"], "messages": []})
+            except Exception:
+                log.exception("could not start a new conversation")
+
+        self.pool.submit(new)
+
+    def _panel_choose(self, conversation_id: int) -> None:
+        def load() -> None:
+            try:
+                self.bridge.panel_conversation.emit(self.engine.get(f"/v1/history/{conversation_id}"))
+            except Exception:
+                log.exception("could not open conversation %s", conversation_id)
+
+        self.pool.submit(load)
+
+    def _panel_history(self) -> None:
+        def load() -> None:
+            try:
+                self.bridge.panel_history.emit(self.engine.get("/v1/history")["conversations"])
+            except Exception:
+                log.exception("could not load history")
+
+        self.pool.submit(load)
+
+    # ---- system check ------------------------------------------------------------------
+    def _open_system_check(self) -> None:
+        from hark.app.system_check import SystemCheck
+
+        self._system_check = SystemCheck(get_look(self.settings.look), self._system_check_items)
+        self._system_check.show()
+        self._system_check.raise_()
+
+    def _system_check_items(self) -> list[dict]:
+        items = []
+        stream = self.recorder._stream
+        if stream is not None:
+            try:
+                name = sd.query_devices(stream.device, "input")["name"]
+            except Exception:
+                name = "the default microphone"
+            items.append(check("Microphone", "ok", f"Listening on {name}."))
+        else:
+            items.append(check("Microphone", "error", "No microphone is open.",
+                               "Plug one in or allow microphone access in Windows Settings → Privacy, then restart Hark."))
+        if self.hotkeys._hooks:
+            items.append(check("Hotkeys", "ok", f"Hold {self.settings.ptt_key} to talk, {self.settings.dictation_key} to "
+                                                f"dictate; {self.settings.panel_key} opens the panel."))
+        else:
+            items.append(check("Hotkeys", "error", "Global hotkeys aren't active.",
+                               "Another app may be blocking them. Restart Hark; the notch and tray still work."))
+        if not self._wake_enabled:
+            items.append(check("Hands-free", "ok", "Off. Turn on “Listen for Hey Hark” in the tray menu."))
+        elif battery_saver_on():
+            items.append(check("Hands-free", "warn", "On, but resting while battery saver is on."))
+        else:
+            items.append(check("Hands-free", "ok", "Listening for the wake phrase."))
+        try:
+            items += self.engine.get("/v1/system/check")["items"]
+        except Exception as exc:
+            items.append(check("Engine", "error", f"Hark's engine isn't answering ({exc}).", "Restart Hark."))
+        return items
 
 
 def target_info(target: win_foreground.Target | None) -> dict:
@@ -457,3 +600,7 @@ def target_info(target: win_foreground.Target | None) -> dict:
     if target is None:
         return {}
     return {"process": target.process, "title": target.title, "app": target.app, "hwnd": target.hwnd}
+
+
+def check(name: str, status: str, detail: str, fix: str | None = None) -> dict:
+    return {"name": name, "status": status, "detail": detail, "fix": fix}

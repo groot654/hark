@@ -138,3 +138,22 @@ def test_integration_focus_start_reaches_the_notch(client, engine):
     tool(client, "focus.start", minutes=10)
     [(kind, data)] = [e for e in seen if e[0] == "client.actions"]
     assert data["actions"][0]["type"] == "focus" and data["actions"][0]["minutes"] == 10
+
+
+def test_history_endpoints(client):
+    first = client.post("/v1/chat", json={"text": "add milk to my list"}).json()["conversation_id"]
+    [conv] = client.get("/v1/history").json()["conversations"]
+    assert conv["id"] == first and conv["title"] == "add milk to my list"
+    messages = client.get(f"/v1/history/{first}").json()["messages"]
+    assert [m["role"] for m in messages] == ["user", "assistant"]
+    second = client.post("/v1/history/new").json()["id"]
+    client.post("/v1/chat", json={"text": "add eggs to my list"})
+    client.post("/v1/chat", json={"text": "add bread to my list", "conversation_id": first})
+    counts = {c["id"]: c["messages"] for c in client.get("/v1/history").json()["conversations"]}
+    assert counts == {first: 4, second: 2}
+
+
+def test_system_check_reports_each_part(client):
+    items = client.get("/v1/system/check").json()["items"]
+    assert [i["name"] for i in items] == ["Speech recognition", "AI model", "Disk space", "Memory"]
+    assert all(i["status"] in ("ok", "warn", "error") for i in items)

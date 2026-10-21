@@ -94,6 +94,19 @@ class Store:
                        (conversation_id, limit))
         return [dict(r) for r in reversed(rows)]
 
+    def conversations(self, limit: int = 50) -> list[dict]:
+        """Conversations with at least one message, most recently active first."""
+        rows = self._q(
+            "SELECT c.id, c.started_at, max(m.created_at) AS updated_at, count(m.id) AS messages, "
+            "(SELECT content FROM messages WHERE conversation_id = c.id AND role = 'user' ORDER BY id LIMIT 1) AS title "
+            "FROM conversations c JOIN messages m ON m.conversation_id = c.id "
+            "GROUP BY c.id ORDER BY updated_at DESC LIMIT ?", (limit,))
+        return [dict(r) for r in rows]
+
+    def conversation_messages(self, conversation_id: int) -> list[dict]:
+        return [dict(r) for r in self._q(
+            "SELECT role, content, created_at FROM messages WHERE conversation_id=? ORDER BY id", (conversation_id,))]
+
     def prune_history(self, retention_days: int) -> None:
         cutoff = time.time() - retention_days * 86400
         self._x("DELETE FROM conversations WHERE started_at < ?", (cutoff,))

@@ -60,7 +60,7 @@ def main() -> int:
     settings = Settings()
     engine, port = start_in_thread(
         args.stt or settings.get("stt/backend"), args.port, args.llm or settings.get("llm/mode"),
-        settings.get("llm/url"), settings.get("llm/model"),
+        settings.get("llm/url"), settings.get("llm/model"), settings.get("history/retention_days"),
     )
 
     from hark.app.engine_client import EngineClient

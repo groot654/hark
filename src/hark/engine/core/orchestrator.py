@@ -43,6 +43,7 @@ REWRITE = re.compile(
     re.I,
 )
 AGENT_MAX_STEPS = 5
+CONVERSATION_IDLE_S = 600
 PENDING_TTL = 120
 # Typing and key presses act on whatever window is in front, so when the model (not the user's own
 # words) chose them, ask first.
@@ -91,7 +92,9 @@ class Orchestrator:
         try:
             if is_noise(text):
                 return self._finish(run_id, ToolResult(), text)
+            conversation = self.conversation_id()  # before the reply, so the chat model sees earlier turns only
             result = self._dispatch(text, target or {}, selection)
+            self._record(conversation, text, result)
             return self._finish(run_id, result, text)
         except Exception as exc:
             log.exception("run failed")
@@ -299,10 +302,7 @@ class Orchestrator:
         return self._chat(text)
 
     def _chat(self, text: str) -> ToolResult:
-        if self._conversation is None or time.time() - self._last_turn > 600:
-            self._conversation = self.store.new_conversation()
-        self._last_turn = time.time()
-        history = self.store.recent_messages(self._conversation, limit=8)
+        history = self.store.recent_messages(self.conversation_id(), limit=8)
         memories = self.store.list_memories()[:20]
         memory_text = prompts.MEMORIES.format(facts="\n".join(f"- {m['value']}" for m in memories)) if memories else ""
         now = dt.datetime.now()
@@ -313,9 +313,34 @@ class Orchestrator:
         except LLMUnavailable:
             return ToolResult(say="My AI model isn't running yet, so I can only do commands for now.",
                               client_actions=[mood("puzzled")])
-        self.store.add_message(self._conversation, "user", text)
-        self.store.add_message(self._conversation, "assistant", answer)
         return ToolResult(say=answer, card={"body": answer})
+
+    # ---- history --------------------------------------------------------------------------
+    def conversation_id(self) -> int:
+        """The conversation in progress; a new one starts after 10 minutes of quiet."""
+        if self._conversation is None or time.time() - self._last_turn > CONVERSATION_IDLE_S:
+            self._conversation = self.store.new_conversation()
+        self._last_turn = time.time()
+        return self._conversation
+
+    def new_conversation(self) -> int:
+        self._conversation = self.store.new_conversation()
+        self._last_turn = time.time()
+        return self._conversation
+
+    def continue_conversation(self, conversation_id: int) -> None:
+        self._conversation = conversation_id
+        self._last_turn = time.time()
+
+    def _record(self, conversation: int, text: str, result: ToolResult) -> None:
+        """Keep the exchange for the History tab. Confirmation answers ("yes") are kept too, so the
+        conversation reads naturally; what was typed into other apps isn't."""
+        self.store.add_message(conversation, "user", text.strip())
+        reply = result.say.strip()
+        if not reply and any(a.get("type") == "insert_text" for a in result.client_actions):
+            reply = "(Wrote it into the app.)"
+        if reply:
+            self.store.add_message(conversation, "assistant", reply)
 
     # ---- output ---------------------------------------------------------------------------
     def _finish(self, run_id: str, result: ToolResult, text: str) -> dict:

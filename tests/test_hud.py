@@ -104,3 +104,54 @@ def test_pointer_ring_paints_and_closes_itself(qt):
     ring.started = time.monotonic() - 1
     ring._tick()
     assert not ring.isVisible()
+
+
+@pytest.mark.parametrize(("ago", "text"), [(10, "now"), (300, "5m"), (3 * 3600, "3h"), (30 * 3600, "yesterday"),
+                                           (4 * 86400, "4d")])
+def test_relative_time(ago, text):
+    from hark.app.panel import relative_time
+
+    assert relative_time(1_800_000_000 - ago, now=1_800_000_000) == text
+
+
+def test_relative_time_older_shows_the_date():
+    import datetime as dt
+
+    from hark.app.panel import relative_time
+
+    ts = dt.datetime(2026, 10, 1, 12).timestamp()
+    assert relative_time(ts, now=ts + 20 * 86400) == "1 Oct"
+
+
+def test_panel_chat_and_history(qt):
+    from hark.app.panel import Panel
+
+    panel = Panel(get_look("arc"))
+    sent = []
+    panel.submitted.connect(sent.append)
+    panel.input.setText("  add milk to my list ")
+    panel._submit()
+    assert sent == ["add milk to my list"] and panel.input.text() == ""
+    panel.add_message("assistant", "Added “milk” to your list.")
+    panel.set_busy(False)
+    assert panel._messages.count() - 1 == 2
+    chosen = []
+    panel.conversation_chosen.connect(chosen.append)
+    panel.set_conversations([{"id": 7, "title": None, "updated_at": 0, "messages": 2}])
+    assert panel.history.item(0).text().startswith("Untitled")
+    panel._choose(panel.history.item(0))
+    assert chosen == [7]
+    panel.clear_messages()
+    assert panel._messages.count() == 1
+    assert not panel.grab().isNull()
+
+
+def test_system_check_summary_and_rows(qt):
+    from hark.app.system_check import SystemCheck, summary
+
+    items = [{"name": "Microphone", "status": "ok", "detail": "Fine.", "fix": None},
+             {"name": "Memory", "status": "warn", "detail": "0.7 GB free.", "fix": "Close some apps."}]
+    assert summary(items) == "Working, with something to look at."
+    assert summary(items[:1]) == "Everything's working."
+    dialog = SystemCheck(get_look("arc"), lambda: items)
+    assert dialog.rows.count() == 2 and not dialog.grab().isNull()
