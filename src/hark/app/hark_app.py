@@ -36,6 +36,7 @@ class _Bridge(QObject):
     result = Signal(dict)
     failure = Signal(str)
     engine_event = Signal(dict)
+    focus = Signal(dict)
 
 
 class HarkApp:
@@ -65,6 +66,7 @@ class HarkApp:
         b.result.connect(self._on_result)
         b.failure.connect(self._on_failure)
         b.engine_event.connect(self._on_engine_event)
+        b.focus.connect(self._apply_focus)
 
         self.hotkeys = Hotkeys(
             HotkeyConfig(
@@ -77,6 +79,7 @@ class HarkApp:
         )
         self.hotkeys.start()
         self.engine.subscribe(b.engine_event.emit)
+        self.pool.submit(self._restore_focus)
         self._build_tray()
         try:
             self.recorder.open()
@@ -190,6 +193,22 @@ class HarkApp:
             self.hud.apply_look(get_look(self.settings.look))
         elif kind == "mood":
             self.hud.react(action.get("mood", ""))
+        elif kind == "focus":
+            self._apply_focus(action)
+
+    def _apply_focus(self, focus: dict) -> None:
+        minutes = focus.get("minutes")
+        self.hud.set_focus(focus.get("ends_at"), minutes * 60 if minutes else None)
+
+    def _restore_focus(self) -> None:
+        """Pick up a focus session that was already running when Hark (re)started."""
+        try:
+            focus = self.engine.get("/v1/productivity/summary").get("focus")
+        except Exception:
+            log.exception("could not restore focus session")
+            return
+        if focus and focus.get("ends_at"):
+            self.bridge.focus.emit(focus)
 
     def _on_failure(self, message: str) -> None:
         self.hud.show_card(Card(title="Something went wrong", body=message[:200], kind="error"), dismiss_ms=6000)
@@ -200,6 +219,8 @@ class HarkApp:
             self.hud.show_card(Card(title="Reminder", body=event.get("text", "")), dismiss_ms=12_000)
         elif kind == "notify":
             self.hud.show_card(Card(title=event.get("title", DISPLAY_NAME), body=event.get("text", "")))
+        elif kind == "focus.ended":
+            self.hud.set_focus(None)
         elif kind == "agent.step":
             self.hud.show_card(Card(title="Working on it", items=event.get("items", []), kind="agent"), dismiss_ms=20_000)
 

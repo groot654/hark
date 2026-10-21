@@ -29,6 +29,7 @@ from hark.engine.reminders import ReminderScheduler
 from hark.engine.security import TokenGuard, issue_token
 from hark.engine.store.sqlite_store import Store
 from hark.engine.tools.app_index import AppIndex
+from hark.engine.tools.registry import focus_action
 from hark.paths import db_path, port_file
 
 log = logging.getLogger("hark.engine")
@@ -161,7 +162,7 @@ class Engine:
 
         @app.get("/v1/productivity/summary", dependencies=[guard])
         def summary() -> dict:
-            return {"card": self.orchestrator.summary_card()}
+            return {"card": self.orchestrator.summary_card(), "focus": focus_action(self.store.active_focus())}
 
         @app.get("/v1/memory", dependencies=[guard])
         def memory() -> dict:

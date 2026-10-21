@@ -40,6 +40,7 @@ class ReminderScheduler:
         focus = self.store.active_focus()
         if focus and now >= focus["started_at"] + focus["planned_minutes"] * 60:
             self.store.end_focus()
+            self.bus.publish("focus.ended", id=focus["id"])
             label = f" on {focus['label']}" if focus["label"] else ""
             self.bus.publish("notify", title="Focus session done",
                              text=f"{focus['planned_minutes']} minutes{label}. Take a short break.")

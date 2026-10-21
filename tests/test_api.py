@@ -58,3 +58,10 @@ def test_summary_export_and_clear(client):
     assert client.get("/v1/data/export").json()["tasks"][0]["title"] == "water plants"
     assert client.post("/v1/data/clear").json() == {"ok": True}
     assert client.get("/v1/data/export").json()["tasks"] == []
+
+
+def test_summary_reports_running_focus(client):
+    assert client.get("/v1/productivity/summary").json()["focus"] == {"type": "focus", "ends_at": None}
+    client.post("/v1/chat", json={"text": "start a 25 minute focus session"})
+    focus = client.get("/v1/productivity/summary").json()["focus"]
+    assert focus["minutes"] == 25 and focus["ends_at"] > 0

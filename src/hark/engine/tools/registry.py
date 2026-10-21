@@ -286,11 +286,21 @@ class ToolRegistry:
         minutes = int(args.get("minutes") or 25)
         self.store.start_focus(minutes, args.get("label"))
         return ToolResult(say=f"Focus for {minutes} minutes. I'll tell you when it's done.",
-                          client_actions=[{"type": "focus", "minutes": minutes}])
+                          client_actions=[focus_action(self.store.active_focus())])
 
     def _focus_stop(self, _args: dict) -> ToolResult:
         ended = self.store.end_focus()
-        return ToolResult(say="Focus session stopped." if ended else "There's no focus session running.")
+        if not ended:
+            return ToolResult(say="There's no focus session running.")
+        return ToolResult(say="Focus session stopped.", client_actions=[focus_action(None)])
+
+
+def focus_action(session: dict | None) -> dict:
+    """Client action that shows the notch's focus countdown, or clears it when `session` is None."""
+    if not session:
+        return {"type": "focus", "ends_at": None}
+    return {"type": "focus", "ends_at": session["started_at"] + session["planned_minutes"] * 60,
+            "minutes": session["planned_minutes"], "label": session["label"]}
 
 
 def re_strip_lead(text: str) -> str:

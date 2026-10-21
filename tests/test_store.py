@@ -71,3 +71,12 @@ def test_scheduler_ends_finished_focus(store):
     store.start_focus(1, "essay")
     ReminderScheduler(store, EventBus()).tick(time.time() + 61)
     assert store.active_focus() is None
+
+
+def test_scheduler_announces_focus_end(store):
+    bus = EventBus()
+    events = []
+    bus.publish = lambda kind, **data: events.append(kind)
+    store.start_focus(1, None)
+    ReminderScheduler(store, bus).tick(time.time() + 61)
+    assert events == ["focus.ended", "notify"]

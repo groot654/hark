@@ -10,6 +10,7 @@ import ctypes
 import logging
 import math
 import random
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -48,6 +49,7 @@ SIZES = {
     HudState.THINKING: QSize(220, 40),
     HudState.ERROR: QSize(380, 64),
 }
+REST_FOCUS_SIZE = QSize(150, 30)  # resting pill while a focus countdown runs
 CARD_WIDTH = 460
 CARD_MAX_HEIGHT = 400
 PADDING = 16
@@ -59,6 +61,14 @@ LOVE_COLOUR = "#ff6fa8"
 HOP_S = 0.35
 HEART_COUNT = 5
 SPI_GETCLIENTAREAANIMATION = 0x1042
+
+
+def format_remaining(seconds: float) -> str:
+    """Countdown text: 24:59, or 1:05:00 for an hour or more."""
+    total = max(0, math.ceil(seconds))
+    hours, rest = divmod(total, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
 
 
 def animations_enabled() -> bool:
@@ -90,6 +100,8 @@ class Hud(QWidget):
         self._mood_age = 0.0
         self._hearts: list[tuple[float, float]] = []  # (side -1..1, start delay)
         self._animate = animations_enabled()
+        self._focus_ends: float | None = None  # epoch seconds
+        self._focus_total = 0.0
 
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowDoesNotAcceptFocus
@@ -116,7 +128,9 @@ class Hud(QWidget):
             log.info("hud: %s -> %s", self.state.value, state.value)
         self.state = state
         self._dismiss.stop()
-        if state in SIZES:
+        if state == HudState.REST:
+            self._animate_to(self._rest_size())
+        elif state in SIZES:
             self._animate_to(SIZES[state])
         if self._hidden_for_fullscreen and state != HudState.REST:
             self.show()
@@ -135,6 +149,23 @@ class Hud(QWidget):
             words = len((card.body + " ".join(card.items)).split())
             dismiss_ms = max(4200, min(15_000, 2000 + words * 300))
         self._dismiss.start(dismiss_ms)
+
+    def set_focus(self, ends_at: float | None, total_seconds: float | None = None) -> None:
+        """Show a focus countdown in the resting pill until `ends_at` (epoch seconds); None clears it."""
+        if ends_at is not None and ends_at <= time.time():
+            ends_at = None
+        self._focus_ends = ends_at
+        if ends_at is not None:
+            self._focus_total = total_seconds or (ends_at - time.time())
+        if self.state == HudState.REST:
+            self._animate_to(self._rest_size())
+
+    @property
+    def focus_remaining(self) -> float | None:
+        return None if self._focus_ends is None else max(0.0, self._focus_ends - time.time())
+
+    def _rest_size(self) -> QSize:
+        return REST_FOCUS_SIZE if self._focus_ends is not None else SIZES[HudState.REST]
 
     def react(self, mood: str) -> None:
         """Play a short expression (see MOODS); unknown moods are ignored."""
@@ -209,6 +240,8 @@ class Hud(QWidget):
             if self._mood_age >= MOODS[self.mood]:
                 self.mood = None
                 self._hearts = []
+        if self._focus_ends is not None and time.time() >= self._focus_ends:
+            self.set_focus(None)
         self.update()
 
     def _hop(self) -> float:
@@ -238,8 +271,12 @@ class Hud(QWidget):
         p.drawPath(path)
 
         eye_box = QRectF(rect.left() + 12, rect.top() + 6, 26, min(rect.height(), 44) - 12)
-        if self.state == HudState.REST:
+        focusing = self.state == HudState.REST and self._focus_ends is not None
+        if self.state == HudState.REST and not focusing:
             eye_box = QRectF(rect.center().x() - 13, rect.top() + 6, 26, rect.height() - 12)
+        elif focusing:
+            eye_box = QRectF(rect.left() + 16, rect.top() + 6, 26, rect.height() - 12)
+            self._paint_focus(p, rect, eye_box)
         self._paint_eyes(p, eye_box.translated(0, self._hop()))
         if self._hearts and self._animate:
             p.save()
@@ -297,6 +334,29 @@ class Hud(QWidget):
         for cx, eye_h, dy in zip(centres, heights, lift):
             h = max(2.0, eye_h * blink)
             p.drawRoundedRect(QRectF(cx - eye_w / 2 + look_x, cy - h / 2 + dy, eye_w, h), eye_w / 2, eye_w / 2)
+
+    def _paint_focus(self, p: QPainter, rect: QRectF, eye_box: QRectF) -> None:
+        """Countdown text to the right of the eyes, and a thin progress line along the bottom."""
+        remaining = self.focus_remaining or 0.0
+        f = QFont("Segoe UI Variable Text", 10)
+        f.setBold(True)
+        f.setStyleStrategy(QFont.PreferAntialias)
+        p.setFont(f)
+        p.setPen(QColor(self.look.text))
+        text_box = QRectF(eye_box.right() + 8, rect.top(), rect.right() - eye_box.right() - 22, rect.height())
+        p.drawText(text_box, Qt.AlignRight | Qt.AlignVCenter, format_remaining(remaining))
+
+        done = 1.0 - remaining / self._focus_total if self._focus_total > 0 else 0.0
+        inset = rect.height() / 2
+        track = QRectF(rect.left() + inset, rect.bottom() - 3, rect.width() - 2 * inset, 1.6)
+        c = QColor(self.look.accent)
+        c.setAlphaF(0.22)
+        p.setPen(Qt.NoPen)
+        p.setBrush(c)
+        p.drawRoundedRect(track, 0.8, 0.8)
+        c.setAlphaF(0.9)
+        p.setBrush(c)
+        p.drawRoundedRect(QRectF(track.left(), track.top(), track.width() * min(1.0, max(0.0, done)), track.height()), 0.8, 0.8)
 
     def _paint_hearts(self, p: QPainter, rect: QRectF, eye_box: QRectF) -> None:
         """Small hearts float away from the eyes and fade: out towards the ends of the resting pill,

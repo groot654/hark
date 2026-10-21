@@ -216,3 +216,18 @@ def test_tidy_written_chat_drops_bare_greeting():
     from hark.engine.core.orchestrator import tidy_written
 
     assert tidy_written("Hi,\n\nSounds good. See you at 7.", "reply", casual=True) == "Sounds good. See you at 7."
+
+
+def focus_actions(out):
+    return [a for a in out["client_actions"] if a.get("type") == "focus"]
+
+
+def test_focus_start_and_stop_drive_the_countdown(store):
+    import time
+
+    o, _ = make(store)
+    [start] = focus_actions(o.handle("start a 50 minute focus session"))
+    assert start["minutes"] == 50
+    assert abs(start["ends_at"] - (time.time() + 3000)) < 5
+    assert focus_actions(o.handle("stop focus")) == [{"type": "focus", "ends_at": None}]
+    assert focus_actions(o.handle("stop focus")) == []  # nothing running
