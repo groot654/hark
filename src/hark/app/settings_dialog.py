@@ -8,9 +8,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from hark.app import autostart
 from hark.app.look import LOOKS
 from hark.app.settings_store import Settings
 
+AUTOSTART = "general/autostart"
 RESTART_KEYS = {"hotkeys/ptt", "hotkeys/dictation", "hotkeys/panel", "hotkeys/mode", "stt/backend", "audio/microphone",
                 "llm/mode", "llm/url", "llm/model"}
 
@@ -24,6 +26,9 @@ class SettingsDialog(QDialog):
         self._fields: dict[str, QWidget] = {}
 
         tabs = QTabWidget()
+        tabs.addTab(self._page([
+            (AUTOSTART, "Start Hark when I sign in", QCheckBox()),
+        ]), "General")
         tabs.addTab(self._page([
             ("audio/microphone", "Microphone", self._mic_combo()),
             ("hotkeys/ptt", "Command key (hold to talk)", QLineEdit()),
@@ -88,7 +93,7 @@ class SettingsDialog(QDialog):
         page = QWidget()
         form = QFormLayout(page)
         for key, label, widget in rows:
-            value = self.settings.get(key)
+            value = autostart.is_enabled() if key == AUTOSTART else self.settings.get(key)
             if isinstance(widget, QComboBox):
                 index = widget.findData(value)
                 widget.setCurrentIndex(max(0, index))
@@ -113,6 +118,10 @@ class SettingsDialog(QDialog):
                 value = widget.value()
             else:
                 value = widget.text().strip()
+            if key == AUTOSTART:  # lives in the Windows Run key, not in Hark's settings
+                if value != autostart.is_enabled():
+                    autostart.set_enabled(value)
+                continue
             if value != self.settings.get(key) and key in RESTART_KEYS:
                 changed_restart = True
             self.settings.set(key, value)
