@@ -110,3 +110,31 @@ def test_background_speech_is_dropped_without_its_text(client, engine):
     assert listen_wake(client, engine, "Hey Mark, take a note") == {"transcript": "", "wake": False,
                                                                      "client_actions": []}
     assert client.get("/v1/data/export").json()["notes"] == []
+
+
+def tool(client, name, **args):
+    return client.post("/v1/integrations/tool", json={"name": name, "args": args})
+
+
+def test_integrations_reach_lists_and_timers(client):
+    assert tool(client, "task.add", title="ship v2").json() == {"ok": True, "text": "Added “ship v2” to your list.",
+                                                               "items": None}
+    listed = tool(client, "task.list").json()
+    assert listed["items"] == ["ship v2"]
+    assert tool(client, "focus.status").json()["text"] == "No focus session is running."
+    assert tool(client, "focus.start", minutes=15).json()["ok"]
+    assert "of 15 minutes left" in tool(client, "focus.status").json()["text"]
+
+
+def test_integrations_cannot_type_click_open_delete_or_read_memory(client):
+    for name in ("input.type", "input.keys", "ui.click", "app.open", "web.open", "system.shutdown",
+                 "task.clear_completed", "memory.list", "memory.forget", "persona.thanks"):
+        assert tool(client, name, text="x").status_code == 403, name
+
+
+def test_integration_focus_start_reaches_the_notch(client, engine):
+    seen = []
+    engine.bus.publish = lambda kind, **data: seen.append((kind, data))
+    tool(client, "focus.start", minutes=10)
+    [(kind, data)] = [e for e in seen if e[0] == "client.actions"]
+    assert data["actions"][0]["type"] == "focus" and data["actions"][0]["minutes"] == 10

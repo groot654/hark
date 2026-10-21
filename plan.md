@@ -99,7 +99,15 @@ often; we can revisit after real use.
 **Tests.** Grammar and matcher unit tests; a real check against Notepad and Calculator (open, click
 buttons, verify the result), done with your apps closed or untouched.
 
-## 4. MCP mode `[ ]` (small–medium)
+## 4. MCP mode `[x]` (small–medium)
+
+**Result.** Done. `hark --mcp` (official MCP Python SDK 2.3) exposes 13 tools: add/list/complete to-dos,
+add/search notes, log habit and streak, add/list reminders, start/stop/status of the focus timer, and a
+notch message. A real round trip with the SDK's client (protocol 2025-11-25) added and listed to-dos,
+started a focus timer, set a reminder and showed a message; with Hark not running, tools answer "Hark isn't
+running. Start it and try again." A focus timer started this way also shows its countdown in the notch.
+Setup lines for Claude Code and Claude Desktop are in the README. Not registered in your own Claude
+config; say if you'd like that done.
 
 **Goal.** Let Claude Code, Claude Desktop and other MCP clients use Hark: add to-dos and notes, set
 reminders, log habits, start a focus timer, show a message on the notch ("Build finished").

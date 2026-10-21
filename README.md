@@ -7,8 +7,9 @@ app in front, or answers. Speech recognition runs on your PC; nothing is sent to
 
 - **Hands-free**: say "Hey Hark, open Spotify", or "Hey Hark", a pause, then the request. Off by default;
   turn it on from the tray or Settings. Speech not addressed to Hark is dropped without being kept.
-- **Voice commands**: open and close apps and websites, web search, volume and media keys, keyboard shortcuts,
-  window control, lock/shutdown (with confirmation), battery and system stats.
+- **Voice commands**: open and close apps and websites, click buttons, links, tabs and menus in the app in
+  front ("click send", "open the File menu"), web search, volume and media keys, keyboard shortcuts, window
+  control, lock/shutdown (with confirmation), battery and system stats.
 - **Dictation** into any app, in three styles (exact, clean, polished), with spoken punctuation ("comma",
   "new paragraph"), lists ("bullet", "number one"), corrections ("scratch that", "make that"), a personal
   dictionary and snippets. Chat apps get a casual style and code editors stay literal.
@@ -52,6 +53,24 @@ instead, pick "Ollama or another server" under Settings → Privacy & AI, or run
 | Hold Right Ctrl | Command |
 | Hold Right Alt | Dictation |
 | F9 | Panel |
+
+## Use Hark from Claude and other AI tools (MCP)
+
+`hark --mcp` is an MCP server that lets Claude Code, Claude Desktop and other MCP clients use Hark's to-do
+list, notes, habits, reminders and focus timer, and show a message in the notch ("Build finished"). Hark has
+to be running. Other apps can't type, click, open apps, delete anything, or read what Hark remembers about you.
+
+Claude Code:
+
+```sh
+claude mcp add hark -- "C:\path\to\hark\.venv\Scripts\hark.exe" --mcp
+```
+
+Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{ "mcpServers": { "hark": { "command": "C:\\path\\to\\hark\\.venv\\Scripts\\hark.exe", "args": ["--mcp"] } } }
+```
 
 ## Layout
 

@@ -12,7 +12,7 @@ import time
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -20,6 +20,7 @@ from hark import __version__
 from hark.app.audio_device import from_wav_bytes
 from hark.engine.core import prompts, wake
 from hark.engine.core.dictation import format_dictation
+from hark.engine.core.intents import Intent
 from hark.engine.core.llm import LLMClient, LLMUnavailable
 from hark.engine.core.local_model import MODEL_NAME, LocalModel
 from hark.engine.core.orchestrator import Orchestrator
@@ -51,6 +52,19 @@ class ConfirmRequest(BaseModel):
 class NotifyRequest(BaseModel):
     text: str = Field(min_length=1, max_length=500)
     title: str = Field(default="Hark", max_length=80)
+
+
+class IntegrationRequest(BaseModel):
+    name: str
+    args: dict = {}
+
+
+# What other apps (MCP clients) may do: personal lists and timers only. Nothing that types, clicks,
+# opens apps, deletes, or reads what Hark remembers about the user.
+INTEGRATION_TOOLS = {"task.add", "task.list", "task.complete", "note.add", "note.list", "note.search", "habit.log",
+                     "habit.streak", "reminder.add", "reminder.list", "focus.start", "focus.stop", "focus.status"}
+# Client actions an integration's result may pass on to the notch.
+INTEGRATION_CLIENT_ACTIONS = {"focus", "mood"}
 
 
 class PolishRequest(BaseModel):
@@ -111,6 +125,14 @@ class Engine:
         except LLMUnavailable:
             log.warning("model warm-up failed")
 
+    def _focus_status(self) -> str:
+        focus = self.store.active_focus()
+        if not focus:
+            return "No focus session is running."
+        left = max(0, round((focus["started_at"] + focus["planned_minutes"] * 60 - time.time()) / 60))
+        label = f" on {focus['label']}" if focus["label"] else ""
+        return f"Focus session{label}: {left} of {focus['planned_minutes']} minutes left."
+
     def _wake(self, transcript: str, target: dict) -> dict:
         """A burst heard while idle: act only if it opens with the wake phrase. Anything else is
         background speech, so neither the transcript nor its text in the log is kept."""
@@ -153,6 +175,20 @@ class Engine:
             """Show a short message in the notch (a second launch, MCP clients)."""
             self.bus.publish("notify", title=req.title, text=req.text)
             return {"ok": True}
+
+        @app.post("/v1/integrations/tool", dependencies=[guard])
+        def integration_tool(req: IntegrationRequest) -> dict:
+            """One allow-listed tool call from another app (see `hark --mcp`)."""
+            if req.name not in INTEGRATION_TOOLS:
+                raise HTTPException(status_code=403, detail=f"{req.name} isn't available to other apps")
+            if req.name == "focus.status":
+                return {"ok": True, "text": self._focus_status(), "items": None}
+            result = self.orchestrator.tools.run(Intent(req.name, dict(req.args), f"integration {req.name}"))
+            actions = [a for a in result.client_actions if a.get("type") in INTEGRATION_CLIENT_ACTIONS]
+            if actions:
+                self.bus.publish("client.actions", actions=actions)  # e.g. show the focus countdown
+            log.info("integration tool %s -> %s", req.name, result.status)
+            return {"ok": result.status == "ok", "text": result.say, "items": (result.card or {}).get("items")}
 
         @app.post("/v1/listen", dependencies=[guard])
         def listen(audio: UploadFile = File(...), mode: str = Form("command"), target: str = Form("{}")) -> dict:

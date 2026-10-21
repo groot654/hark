@@ -271,7 +271,11 @@ class HarkApp:
 
     def _on_engine_event(self, event: dict) -> None:
         kind = event.get("type")
-        if kind == "reminder.due":
+        if kind == "client.actions":  # e.g. a focus timer started from another app (MCP)
+            for action in event.get("actions", []):
+                if action.get("type") in ("focus", "mood"):
+                    self._run_client_action(action, None)
+        elif kind == "reminder.due":
             self.hud.show_card(Card(title="Reminder", body=event.get("text", "")), dismiss_ms=12_000)
         elif kind == "notify":
             self.hud.show_card(Card(title=event.get("title", DISPLAY_NAME), body=event.get("text", "")))

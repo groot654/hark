@@ -1,4 +1,4 @@
-"""Entry point: `hark` starts the engine and the notch; `hark --engine` runs the engine alone."""
+"""Entry point: `hark` starts the engine and the notch; `hark --engine` runs the engine alone; `hark --mcp` runs an MCP server for the running Hark."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import sys
 def main() -> int:
     parser = argparse.ArgumentParser(prog="hark")
     parser.add_argument("--engine", action="store_true", help="run only the local engine (no UI)")
+    parser.add_argument("--mcp", action="store_true", help="run an MCP server (stdio) that uses the running Hark")
     parser.add_argument("--port", type=int, default=7861)
     parser.add_argument("--stt", choices=["parakeet", "whisper"], default=None)
     parser.add_argument("--llm", choices=["builtin", "external", "off"], default=None,
@@ -20,6 +21,11 @@ def main() -> int:
 
     setup_logging()
     log = logging.getLogger("hark")
+
+    if args.mcp:  # stdout belongs to the MCP protocol; logs go to the file and stderr
+        from hark.mcp_server import main as mcp_main
+
+        return mcp_main()
 
     if not args.engine:
         from hark.single_instance import acquire, notify_running

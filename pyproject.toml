@@ -21,6 +21,7 @@ dependencies = [
     "winrt-runtime>=3.2",
     "winrt-windows-media-control>=3.2",
     "winrt-windows-foundation>=3.2",
+    "mcp>=2.3",
     "python-multipart>=0.0.20",
 ]
 
