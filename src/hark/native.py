@@ -26,12 +26,21 @@ def copy_msvc_runtime(dest: str | os.PathLike) -> None:
     import shutil
 
     for name in MSVC_RUNTIME:
-        source = os.path.join(_pyside_dir(), name)
-        if os.path.exists(source) and not os.path.exists(os.path.join(dest, name)):
-            shutil.copy2(source, dest)
+        if os.path.exists(os.path.join(dest, name)):
+            continue
+        source = next((os.path.join(d, name) for d in _runtime_dirs() if os.path.exists(os.path.join(d, name))), None)
+        if source:
+            shutil.copy2(source, os.path.join(dest, name))
+
+
+def _runtime_dirs() -> list[str]:
+    """Folders holding current copies of the C++ runtime: PySide6's when run from source; in the packaged app
+    they're spread between the bundle's folder and its PySide6 folder."""
+    import PySide6
+
+    dirs = [os.path.dirname(PySide6.__file__), getattr(sys, "_MEIPASS", ""), os.path.dirname(sys.executable)]
+    return [d for d in dirs if d]
 
 
 def _pyside_dir() -> str:
-    import PySide6
-
-    return os.path.dirname(PySide6.__file__)
+    return _runtime_dirs()[0]

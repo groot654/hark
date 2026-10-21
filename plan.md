@@ -146,7 +146,17 @@ while open and closes with Esc or a click outside; System Check is a separate sm
 
 **Tests.** Endpoint tests; offscreen renders of every panel state; a real check typing a command.
 
-## 6. Start at sign-in, and an installer `[ ]` (medium)
+## 6. Start at sign-in, and an installer `[~]` (medium)
+
+**Result so far.**
+- Done: Settings → General → "Start Hark when I sign in" (off by default; not switched on for you).
+- Done: `packaging\build.ps1` builds `dist\Hark` (244 MB): `Hark.exe` (no console) and `hark-mcp.exe`
+  (console, for MCP clients). The built app was tested as a separate copy: speech model and built-in AI
+  model start (it copies the C++ runtime next to llama-server itself), it answered a question,
+  `hark-mcp.exe` listed its 13 tools and added a to-do, and UI Automation found Calculator's buttons.
+- Waiting on you: Inno Setup isn't installed on this PC. With your OK I'll run
+  `winget install JRSoftware.InnoSetup` (a per-user install, about 7 MB), build `HarkSetup.exe`
+  from `packaging\hark.iss`, then install, launch, check autostart and uninstall it to test.
 
 **Plan.**
 - Settings gets "Start Hark when I sign in" (a per-user `Run` registry entry, no admin rights).

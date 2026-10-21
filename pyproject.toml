@@ -32,7 +32,7 @@ whisper = ["faster-whisper>=1.2"]
 hark = "hark.__main__:main"
 
 [dependency-groups]
-dev = ["pytest>=8.3"]
+dev = ["pytest>=8.3", "pyinstaller>=6.11"]
 
 [build-system]
 requires = ["hatchling"]

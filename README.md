@@ -86,3 +86,14 @@ Claude Desktop (`claude_desktop_config.json`):
 ```sh
 uv run pytest
 ```
+
+## Build the app and installer
+
+```powershell
+uv sync
+powershell -ExecutionPolicy Bypass -File packaging\build.ps1
+```
+
+This builds `dist\Hark\` with `Hark.exe` and `hark-mcp.exe` (PyInstaller). With
+[Inno Setup 6](https://jrsoftware.org/isinfo.php) installed it also builds `dist\HarkSetup-<version>.exe`,
+a per-user installer (no admin rights) that can start Hark at sign-in. Models are downloaded on first run.

@@ -58,7 +58,7 @@ class SettingsDialog(QDialog):
                 ("external", "Ollama or another server"), ("off", "Off: commands only")])),
             ("llm/url", "Server address (external)", QLineEdit(placeholderText="Ollama, found automatically")),
             ("llm/model", "Model name (external)", QLineEdit()),
-        ]), "Privacy & AI")
+        ]), "Privacy && AI")
 
         self._note = QLabel("Hands-free listening transcribes speech it hears nearby to look for the wake phrase, "
                             "so it uses more CPU in busy rooms. Nothing that isn't meant for Hark is kept.")
