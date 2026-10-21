@@ -65,3 +65,11 @@ def test_summary_reports_running_focus(client):
     client.post("/v1/chat", json={"text": "start a 25 minute focus session"})
     focus = client.get("/v1/productivity/summary").json()["focus"]
     assert focus["minutes"] == 25 and focus["ends_at"] > 0
+
+
+def test_notify_shows_a_message(client, engine):
+    seen = []
+    engine.bus.publish = lambda kind, **data: seen.append((kind, data))
+    assert client.post("/v1/system/notify", json={"text": "Build finished"}).json() == {"ok": True}
+    assert seen == [("notify", {"title": "Hark", "text": "Build finished"})]
+    assert client.post("/v1/system/notify", json={"text": ""}).status_code == 422

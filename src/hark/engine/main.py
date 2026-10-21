@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from hark import __version__
 from hark.app.audio_device import from_wav_bytes
@@ -46,6 +46,11 @@ class ChatRequest(BaseModel):
 class ConfirmRequest(BaseModel):
     id: str
     approved: bool
+
+
+class NotifyRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+    title: str = Field(default="Hark", max_length=80)
 
 
 class PolishRequest(BaseModel):
@@ -130,6 +135,12 @@ class Engine:
                         "available": self.llm.available(),
                         "builtin": self.local_model.status() if self.local_model else None},
             }
+
+        @app.post("/v1/system/notify", dependencies=[guard])
+        def notify(req: NotifyRequest) -> dict:
+            """Show a short message in the notch (a second launch, MCP clients)."""
+            self.bus.publish("notify", title=req.title, text=req.text)
+            return {"ok": True}
 
         @app.post("/v1/listen", dependencies=[guard])
         def listen(audio: UploadFile = File(...), mode: str = Form("command"), target: str = Form("{}")) -> dict:

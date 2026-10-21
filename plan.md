@@ -16,7 +16,11 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done
 
 ---
 
-## 1. Only one Hark at a time `[ ]` (small)
+## 1. Only one Hark at a time `[x]` (small)
+
+**Result.** Done. A second launch exits in about 0.6 s and the running Hark shows "Hark is already
+running." Checked with a separate test copy; 216 tests pass. The lock is per data folder, so test copies
+with their own `HARK_DATA_DIR` don't collide with the real one.
 
 **Problem.** Launching Hark twice gives two notches on top of each other, and both answer every hotkey.
 

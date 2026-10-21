@@ -21,6 +21,15 @@ def main() -> int:
     setup_logging()
     log = logging.getLogger("hark")
 
+    if not args.engine:
+        from hark.single_instance import acquire, notify_running
+
+        instance = acquire()  # noqa: F841  (held until this process exits)
+        if instance is None:
+            log.info("Hark is already running; asking it to show itself")
+            notify_running()
+            return 0
+
     from hark.engine.main import start_in_thread
 
     if args.engine:
