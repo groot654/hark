@@ -28,6 +28,11 @@ def test_normalise_strips_wake_word_and_politeness(spoken, expected):
         ("set the volume to fifty percent", "volume.set", {"percent": 50}),
         ("turn the volume down by 20", "volume.change", {"delta": -20}),
         ("louder", "volume.change", {"delta": 10}),
+        ("it's way too loud in here", "volume.change", {"delta": -20}),
+        ("I can barely hear this", "volume.change", {"delta": 20}),
+        ("jot down that the plumber comes Friday", "note.add", {"body": "the plumber comes Friday"}),
+        ("ping me in a quarter of an hour about the laundry", "reminder.add",
+         {"text": "in a quarter of an hour about the laundry"}),
         ("mute", "volume.mute", {"muted": True}),
         ("unmute the sound", "volume.mute", {"muted": False}),
         ("next song", "media.key", {"action": "next"}),
@@ -80,6 +85,10 @@ def test_timer_text_parses_as_a_relative_time():
 
 def test_unknown_phrase_falls_through():
     assert match("what is the meaning of life") == []
+
+
+def test_dictated_text_about_volume_is_not_a_volume_command():
+    assert match_one("type the music is too loud").tool == "input.type"
 
 
 def test_compound_command_splits_when_every_part_is_a_command():

@@ -13,14 +13,15 @@ app in front, or answers. Speech recognition runs on your PC; nothing is sent to
 - **Productivity**: to-dos, notes, reminders and timers, habits with streaks, focus sessions, routines,
   a daily briefing.
 - **Memory**: "remember that…" facts used in later conversations.
-- **AI features** (need a local model): chat, writing ("write a reply saying…"), rewriting the selected text,
-  multi-step "take care of this…" requests.
+- **AI features**, from a built-in model that runs on your PC: chat, writing ("write a reply saying…"),
+  rewriting the selected text, polished dictation, multi-step "take care of this…" requests, and understanding
+  commands phrased in ways the grammar doesn't cover. Questions about you ("what's my name?") are answered
+  straight from what you've asked Hark to remember.
 - **Notch HUD**: a small bar with animated eyes at the top of the screen that shows listening, thinking and results.
 
 ## Requirements
 
 - Windows 10/11, Python 3.12, [uv](https://docs.astral.sh/uv/)
-- Optional: [Ollama](https://ollama.com) with a small model (e.g. Qwen) for the AI features
 
 ## Run
 
@@ -30,7 +31,15 @@ uv run hark            # notch + engine
 uv run hark --engine   # engine only, no UI
 ```
 
-The first launch downloads the Parakeet speech model (~640 MB) to `%LOCALAPPDATA%\hark\models`.
+The first launch downloads, into `%LOCALAPPDATA%\hark\models`:
+
+- the Parakeet speech model (~640 MB)
+- llama.cpp's `llama-server` (b11402, Vulkan build) and the Qwen3.5-0.8B model (Q4_K_M, ~570 MB together),
+  both checked against pinned SHA-256 hashes
+
+Commands work while the downloads run. To use [Ollama](https://ollama.com) or another OpenAI-compatible server
+instead, pick "Ollama or another server" under Settings → Privacy & AI, or run `uv run hark --llm external`;
+`--llm off` runs without a model.
 
 | Key | Action |
 | --- | --- |

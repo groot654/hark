@@ -19,8 +19,10 @@ import uuid
 from dataclasses import dataclass, field
 
 from hark.engine.core import prompts
+from hark.engine.core.dictation import CHAT_APPS
 from hark.engine.core.intents import Intent, match, normalise
 from hark.engine.core.llm import LLMClient, LLMUnavailable
+from hark.engine.core.recall import recall
 from hark.engine.core.transcript_filter import is_noise
 from hark.engine.eventbus import EventBus
 from hark.engine.store.sqlite_store import Store
@@ -42,6 +44,23 @@ REWRITE = re.compile(
 )
 AGENT_MAX_STEPS = 5
 PENDING_TTL = 120
+# Typing and key presses act on whatever window is in front, so when the model (not the user's own
+# words) chose them, ask first.
+MODEL_CONFIRM = frozenset({"input.type", "input.keys"})
+# A tool the model picks only runs if the request mentions what that tool is about.
+TOOL_CUES = {name: re.compile(rf"\b(?:{words})", re.I) for name, words in {
+    "web.search": r"search|look(?:ing)? (?:up|for)|find|google|browse|online|the web|youtube",
+    "system.time": r"time|o'?clock|clock|hour",
+    "system.date": r"date|day|today|month|year",
+    "system.stats": r"battery|charg|cpu|processor|memory|ram|system|computer|pc",
+    "system.lock": r"lock",
+    "volume.get": r"volume|loud",
+    "media.now_playing": r"playing|song|music|track|listening",
+    "memory.list": r"remember|memor|know about",
+    "routine.list": r"routine",
+}.items()}
+PLACEHOLDER = re.compile(r"\s*\[[^\]\n]{2,40}\]")
+SUBJECT_LINE = re.compile(r"^\s*subject:.*\n+", re.I)
 
 
 @dataclass
@@ -110,15 +129,20 @@ class Orchestrator:
         steps = match(text)
         if steps:
             return self._run_steps(steps)
+        if answer := recall(phrase, self.store.list_memories()):
+            return ToolResult(say=answer)
         return self._ask_llm(text, target)
 
-    def _run_steps(self, steps: list[Intent], confirmed: bool = False) -> ToolResult:
+    def _run_steps(self, steps: list[Intent], confirmed: bool = False, ask: frozenset = frozenset()) -> ToolResult:
         if not confirmed:
-            risky = [s for s in steps if self.tools.permission(s) != NORMAL]
+            risky = [s for s in steps if self.tools.permission(s) != NORMAL or s.tool in ask]
             if risky:
                 confirm_id = uuid.uuid4().hex
                 self._pending[confirm_id] = Pending(steps)
-                question = self.tools.confirm_text(risky[0])
+                if self.tools.permission(risky[0]) != NORMAL:
+                    question = self.tools.confirm_text(risky[0])
+                else:
+                    question = "I'll " + ", then ".join(s.phrase for s in steps) + ". Go ahead?"
                 self.bus.publish("state.changed", state="confirming")
                 return ToolResult(say=question, data={"confirm_id": confirm_id},
                                   card={"title": "Confirm", "body": question + " Say yes or no.", "kind": "reply"})
@@ -188,7 +212,7 @@ class Orchestrator:
         self.bus.publish("agent.step", items=[s.phrase for s in steps])
         if not steps:
             return ToolResult(status="error", say="I couldn't work out how to do that safely.")
-        result = self._run_steps(steps)
+        result = self._run_steps(steps, ask=MODEL_CONFIRM)
         if unknown:
             result.say += f" I skipped {len(unknown)} step{'s' * (len(unknown) > 1)} I couldn't do."
         return result
@@ -210,16 +234,17 @@ class Orchestrator:
     # ---- writing --------------------------------------------------------------------------
     def _write(self, request: str, target: dict) -> ToolResult:
         app = (target.get("app") or "").lower()
-        style = "Use a casual, friendly tone." if app in ("whatsapp", "telegram", "discord", "slack") else \
+        style = "Use a casual, friendly tone." if app in CHAT_APPS else \
             "Use a clear, professional tone." if app in ("outlook", "olk", "thunderbird") else ""
         try:
             text = self.llm.chat(
                 [{"role": "system", "content": prompts.WRITER.format(style=style)},
                  {"role": "user", "content": f"Write {request}"}],
-                temperature=0.6, max_tokens=500,
+                temperature=0.4, max_tokens=500,
             )
         except LLMUnavailable:
             return ToolResult(status="error", say="Writing needs the AI model, which isn't ready yet.")
+        text = tidy_written(text, request, casual=app in CHAT_APPS)
         return ToolResult(say="", client_actions=[{"type": "insert_text", "text": text}])
 
     def _rewrite(self, selection: str, instruction: str) -> ToolResult:
@@ -247,8 +272,10 @@ class Orchestrator:
         except ValueError:
             decision = {}
         tool = decision.get("tool")
+        if tool in TOOL_CUES and not TOOL_CUES[tool].search(text):
+            tool = None  # the small model sometimes picks an unrelated tool; answer in conversation instead
         if tool and self.tools.get(tool) and not tool.startswith(("persona.", "system.shutdown", "system.restart")):
-            return self._run_steps([Intent(tool, decision.get("args") or {}, normalise(text))])
+            return self._run_steps([Intent(tool, decision.get("args") or {}, normalise(text))], ask=MODEL_CONFIRM)
         return self._chat(text)
 
     def _chat(self, text: str) -> ToolResult:
@@ -257,7 +284,7 @@ class Orchestrator:
         self._last_turn = time.time()
         history = self.store.recent_messages(self._conversation, limit=8)
         memories = self.store.list_memories()[:20]
-        memory_text = ("Things the user has told you to remember:\n" + "\n".join(f"- {m['value']}" for m in memories)) if memories else ""
+        memory_text = prompts.MEMORIES.format(facts="\n".join(f"- {m['value']}" for m in memories)) if memories else ""
         now = dt.datetime.now()
         system = prompts.PERSONA.format(today=now.strftime("%A %d %B %Y"), time=now.strftime("%H:%M"), memories=memory_text)
         try:
@@ -283,6 +310,21 @@ class Orchestrator:
         if "confirm_id" in result.data:
             out["confirm_id"] = result.data["confirm_id"]
         return out
+
+
+def tidy_written(text: str, request: str, casual: bool = False) -> str:
+    """Small models add template scaffolding despite instructions: drop [placeholders] and an
+    unrequested subject line, and fix the greeting and sign-off a removed name leaves behind.
+    Chat messages lose a nameless greeting altogether."""
+    if "subject" not in request.lower():
+        text = SUBJECT_LINE.sub("", text)
+    text = PLACEHOLDER.sub("", text)
+    text = re.sub(r"^(Dear|Hi|Hello|Hey)\s*,", "Hi,", text, flags=re.M)
+    if casual:
+        text = re.sub(r"\AHi,\s*", "", text.strip())
+    lines = [line.rstrip() for line in text.splitlines()]
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    return text.removesuffix(",") if "\n" in text else text
 
 
 def _strip(response: dict) -> dict:

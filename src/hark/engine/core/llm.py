@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 
@@ -17,6 +18,7 @@ import httpx
 log = logging.getLogger(__name__)
 
 OLLAMA_URL = "http://127.0.0.1:11434"
+THINK = re.compile(r"<think>.*?</think>", re.S)  # in case a model reasons despite being told not to
 
 
 class LLMUnavailable(RuntimeError):
@@ -92,7 +94,8 @@ class LLMClient:
                 timeout=timeout or self.config.timeout,
             )
             resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"].strip()
+            content = resp.json()["choices"][0]["message"]["content"] or ""
+            return THINK.sub("", content).strip()
         except (httpx.HTTPError, KeyError, ValueError) as exc:
             raise LLMUnavailable(str(exc)) from exc
 

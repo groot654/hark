@@ -20,6 +20,7 @@ RELATIVE = re.compile(
     re.I,
 )
 HALF_HOUR = re.compile(r"\bin\s+(?:half an hour|a half hour|30 min)\b", re.I)
+QUARTER_HOUR = re.compile(r"\bin\s+(?:a\s+)?quarter(?:\s+of\s+an)?\s+hour\b", re.I)
 CLOCK = re.compile(
     r"\b(?:at\s+)?(\d{1,2})(?::(\d{2})|\s+(\d{2}))?\s*(a\.?m\.?|p\.?m\.?|o'?clock)?\b", re.I
 )
@@ -52,6 +53,8 @@ def parse_when(text: str, now: dt.datetime | None = None) -> tuple[dt.datetime, 
     now = now or dt.datetime.now()
     if m := HALF_HOUR.search(text):
         return now + dt.timedelta(minutes=30), m.group(0)
+    if m := QUARTER_HOUR.search(text):
+        return now + dt.timedelta(minutes=15), m.group(0)
     if m := RELATIVE.search(text):
         amount = words_to_number(m.group(1))
         if "and a half" in m.group(0).lower():

@@ -23,6 +23,7 @@ def test_words_to_number(token, value):
         ("in an hour and a half", dt.timedelta(minutes=90)),
         ("in 2 and a half hours", dt.timedelta(minutes=150)),
         ("in half an hour", dt.timedelta(minutes=30)),
+        ("in a quarter of an hour", dt.timedelta(minutes=15)),
         ("after 30 seconds", dt.timedelta(seconds=30)),
         ("in a couple of days", dt.timedelta(days=2)),
     ],

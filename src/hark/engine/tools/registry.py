@@ -129,9 +129,9 @@ class ToolRegistry:
         add("window.maximise", "Maximise the window in front", lambda a: self._ok(system.press_keys("windows+up"), ""))
 
         # volume & media
-        add("volume.set", "Set the volume. args: {percent}",
+        add("volume.set", "Set the volume to an exact level. args: {percent}",
             lambda a: ToolResult(say=f"Volume {system.set_volume(int(a['percent']))}%."))
-        add("volume.change", "Raise or lower the volume. args: {delta}",
+        add("volume.change", "Make it louder or quieter (too loud, can't hear). args: {delta}: 10 louder, -10 quieter",
             lambda a: ToolResult(say=f"Volume {system.change_volume(int(a['delta']))}%."))
         add("volume.mute", "Mute or unmute. args: {muted}",
             lambda a: self._ok(system.set_mute(bool(a["muted"])), "Muted." if a["muted"] else "Unmuted."))
@@ -159,14 +159,14 @@ class ToolRegistry:
             SENSITIVE, confirm=lambda a: f"Forget what I know about {a['needle']}?")
 
         # tasks & notes
-        add("task.add", "Add a to-do. args: {title}", lambda a: self._ok(s.add_task(a["title"]), f"Added “{a['title']}” to your list."))
+        add("task.add", "Add something the user has to do to their to-do list. args: {title}", lambda a: self._ok(s.add_task(a["title"]), f"Added “{a['title']}” to your list."))
         add("task.list", "Show the to-do list", lambda a: _list_card(
             "To-do", [t["title"] for t in s.open_tasks()], "Your to-do list is empty."))
         add("task.complete", "Mark a to-do done. args: {needle}", self._complete_task)
         add("task.clear_completed", "Remove completed to-dos",
             lambda a: ToolResult(say=f"Cleared {s.clear_completed_tasks()} finished tasks."),
             DESTRUCTIVE, confirm=lambda a: "Delete all completed tasks?")
-        add("note.add", "Save a note. args: {body}", lambda a: self._ok(s.add_note(a["body"]), "Noted."))
+        add("note.add", "Save a note: information to keep, not a task. args: {body}", lambda a: self._ok(s.add_note(a["body"]), "Noted."))
         add("note.list", "Show recent notes", lambda a: _list_card("Notes", [n["body"] for n in s.recent_notes()], "No notes yet."))
         add("note.search", "Search notes. args: {query}", lambda a: _list_card(
             f"Notes about {a['query']}", [n["body"] for n in s.search_notes(a["query"])], f"No notes about {a['query']}."))

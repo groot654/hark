@@ -20,6 +20,7 @@ DEFAULTS: dict[str, Any] = {
     "stt/backend": "parakeet",  # parakeet | whisper
     "tts/enabled": False,
     "history/retention_days": 30,
+    "llm/mode": "builtin",  # builtin | external | off
     "llm/url": "",
     "llm/model": "",
 }

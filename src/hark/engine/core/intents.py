@@ -94,7 +94,7 @@ def _forget(m):
 
 
 # ---- reminders ----------------------------------------------------------------------
-@rule(r"^(?:remind me|set a reminder|create a reminder|reminder)\b(.*)$")
+@rule(r"^(?:remind me|ping me|nudge me|alert me|set a reminder|create a reminder|reminder)\b(.*)$")
 def _remind(m):
     return Intent("reminder.add", {"text": m.group(1).strip()})
 
@@ -144,6 +144,11 @@ def _task_clear(m):
 # ---- notes --------------------------------------------------------------------------
 @rule(r"^(?:take|make|add|jot down|write down) (?:a )?(?:quick )?note[:,]?(?: that| saying)? (.+)$")
 def _note(m):
+    return Intent("note.add", {"body": m.group(1)})
+
+
+@rule(r"^(?:jot down|write down|note down)(?: that)? (.+)$")
+def _note_jot(m):
     return Intent("note.add", {"body": m.group(1)})
 
 
@@ -217,6 +222,19 @@ def _vol_change(m):
     direction = (m.group(1) or m.group(3)).lower()
     step = _num(m.group(2)) if m.group(2) else 10
     return Intent("volume.change", {"delta": step if direction in ("up", "louder") else -step})
+
+
+_NOT_DICTATED = r"^(?!(?:type|write|draft|note|remind|add|search|google|reply|respond|tell)\b)"
+
+
+@rule(_NOT_DICTATED + r".*\b(?:too loud|so loud|too noisy|hurting my ears|turn it down)\b")
+def _too_loud(m):
+    return Intent("volume.change", {"delta": -20})
+
+
+@rule(_NOT_DICTATED + r".*\b(?:can(?:'t| not|not) hear|(?:can )?barely hear|too quiet|too soft|turn it up)\b")
+def _too_quiet(m):
+    return Intent("volume.change", {"delta": 20})
 
 
 @rule(r"^(?:mute|silence)(?: the)?(?: volume| sound| audio| computer| pc)?$")

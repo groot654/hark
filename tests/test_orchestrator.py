@@ -101,7 +101,7 @@ def test_llm_router_cannot_trigger_shutdown(store):
 def test_chat_fallback_uses_memories(store):
     store.remember("name", "The user's name is Rauf")
     o, llm = make(store, {"tool": None}, "Hello Rauf!")
-    assert o.handle("who am I")["say"] == "Hello Rauf!"
+    assert o.handle("say hello to me")["say"] == "Hello Rauf!"
     system_prompt = llm.calls[1][0]["content"]
     assert "Rauf" in system_prompt
 
@@ -146,3 +146,47 @@ def test_summary_card(store):
     assert o.summary_card()["items"] == ["Nothing on your list."]
     store.add_task("a")
     assert o.summary_card()["items"] == ["☐ a"]
+
+
+def test_questions_about_the_user_are_answered_from_memory_without_the_model(store):
+    store.remember("my name is rauf", "My name is Rauf")
+    o, llm = make(store)
+    assert o.handle("what's my name")["say"] == "Your name is Rauf."
+    assert llm.calls == []
+
+
+def test_router_search_only_when_asked(store):
+    o, _ = make(store, {"tool": "web.search", "args": {"query": "joke"}}, "Why did the scarecrow win an award?")
+    assert o.handle("tell me a joke")["say"] == "Why did the scarecrow win an award?"
+
+
+def test_router_tool_unrelated_to_request_is_ignored(store):
+    o, _ = make(store, {"tool": "system.time"}, "Tokyo.")
+    assert o.handle("what's the capital of Japan")["say"] == "Tokyo."
+
+
+def test_model_chosen_typing_needs_confirmation(store):
+    o, _ = make(store, {"tool": "input.type", "args": {"text": "hello"}})
+    out = o.handle("put a greeting in there")
+    assert "confirm_id" in out
+    assert out["say"] == "I'll put a greeting in there. Go ahead?"
+
+
+def test_agent_plan_with_typing_is_confirmed_first(store):
+    o, _ = make(store, {"steps": ["open notepad", "type hello"]})
+    out = o.handle("take care of this: say hello in notepad")
+    assert out["say"] == "I'll open notepad, then type hello. Go ahead?"
+    assert "confirm_id" in out
+
+
+def test_tidy_written_email():
+    from hark.engine.core.orchestrator import tidy_written
+
+    raw = "Subject: Late\n\nDear [Manager's Name],\n\nI'll be late tomorrow.\n\nBest regards,\n[Your Name]"
+    assert tidy_written(raw, "an email to my manager") == "Hi,\n\nI'll be late tomorrow.\n\nBest regards"
+
+
+def test_tidy_written_chat_drops_bare_greeting():
+    from hark.engine.core.orchestrator import tidy_written
+
+    assert tidy_written("Hi,\n\nSounds good. See you at 7.", "reply", casual=True) == "Sounds good. See you at 7."

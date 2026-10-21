@@ -11,7 +11,8 @@ from PySide6.QtWidgets import (
 from hark.app.look import LOOKS
 from hark.app.settings_store import Settings
 
-RESTART_KEYS = {"hotkeys/ptt", "hotkeys/dictation", "hotkeys/panel", "hotkeys/mode", "stt/backend", "audio/microphone"}
+RESTART_KEYS = {"hotkeys/ptt", "hotkeys/dictation", "hotkeys/panel", "hotkeys/mode", "stt/backend", "audio/microphone",
+                "llm/mode", "llm/url", "llm/model"}
 
 
 class SettingsDialog(QDialog):
@@ -46,8 +47,11 @@ class SettingsDialog(QDialog):
         retention.setSuffix(" days")
         tabs.addTab(self._page([
             ("history/retention_days", "Keep conversation history for", retention),
-            ("llm/url", "AI model server (optional)", QLineEdit(placeholderText="Built in")),
-            ("llm/model", "AI model name (optional)", QLineEdit()),
+            ("llm/mode", "AI model", self._combo([
+                ("builtin", "Built in: Qwen 3.5, runs on this PC"),
+                ("external", "Ollama or another server"), ("off", "Off: commands only")])),
+            ("llm/url", "Server address (external)", QLineEdit(placeholderText="Ollama, found automatically")),
+            ("llm/model", "Model name (external)", QLineEdit()),
         ]), "Privacy & AI")
 
         self._note = QLabel("")
