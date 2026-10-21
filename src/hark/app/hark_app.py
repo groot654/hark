@@ -24,11 +24,13 @@ from hark.app.look import get_look
 from hark.app.settings_store import Settings
 from hark.app.teleprompter import Teleprompter
 from hark.app.vad import SileroVad
+from hark.app.wake_listener import BurstCollector, Endpointer, battery_saver_on
 
 log = logging.getLogger("hark.client")
 
 MIN_HOLD_SECONDS = 0.25
 PROMPTER_SPEECH_THRESHOLD = 0.5
+MAX_QUEUED_BURSTS = 2
 
 
 class _Bridge(QObject):
@@ -43,6 +45,9 @@ class _Bridge(QObject):
     engine_event = Signal(dict)
     focus = Signal(dict)
     prompter_close = Signal()
+    wake_burst = Signal(object)
+    wake_result = Signal(dict)
+    session_done = Signal(str)
 
 
 class HarkApp:
@@ -62,6 +67,18 @@ class HarkApp:
         self._prompter_vad = SileroVad()  # its own instance: the push-to-talk gate resets shared state
         self._prompter_vad_loading = False
         self._esc_hook = None
+        # Hands-free: its own VAD instance, shared by the burst collector and the end-of-request detector.
+        self._wake_vad = SileroVad()
+        self._wake_vad_loading = False
+        self.wake = BurstCollector(self._wake_vad.frame_prob, self.bridge.wake_burst.emit)
+        self.endpointer = Endpointer()
+        self._wake_enabled = False
+        self._wake_busy = False
+        self._wake_session = False
+        self._session_closing = False
+        self._handoff_pending = False
+        self._queued_bursts: list[np.ndarray] = []
+        self._told_battery_saver = False
         self.recorder = Recorder(device=self.settings.microphone or None, on_level=self.bridge.level.emit,
                                  on_frame=self._on_audio_frame)
         self._mode: str | None = None
@@ -79,6 +96,9 @@ class HarkApp:
         b.engine_event.connect(self._on_engine_event)
         b.focus.connect(self._apply_focus)
         b.prompter_close.connect(self._stop_prompter)
+        b.wake_burst.connect(self._on_wake_burst)
+        b.wake_result.connect(self._on_wake_result)
+        b.session_done.connect(self._end_wake_session)
 
         self.hotkeys = Hotkeys(
             HotkeyConfig(
@@ -98,6 +118,7 @@ class HarkApp:
         except Exception as exc:
             log.exception("microphone unavailable")
             self.hud.show_card(Card(title="Microphone unavailable", body=str(exc), kind="error"))
+        self._apply_wake_setting()
 
     # ---- tray ----------------------------------------------------------------
     def _build_tray(self) -> None:
@@ -116,8 +137,12 @@ class HarkApp:
         self.tray.setToolTip(f"{DISPLAY_NAME} — hold {self.settings.ptt_key} to talk")
         menu = QMenu()
         prompter_action = QAction("Teleprompter (copied script)", menu, triggered=self._start_prompter)
+        self._wake_action = QAction("Listen for “Hey Hark”", menu, checkable=True)
+        self._wake_action.setChecked(bool(self.settings.get("wake/enabled")))
+        self._wake_action.toggled.connect(self._toggle_wake)
         settings_action = QAction("Settings…", menu, triggered=self._open_settings)
         quit_action = QAction(f"Quit {DISPLAY_NAME}", menu, triggered=self.quit)
+        menu.addAction(self._wake_action)
         menu.addAction(prompter_action)
         menu.addAction(settings_action)
         menu.addSeparator()
@@ -134,6 +159,10 @@ class HarkApp:
             self.hud.apply_look(get_look(self.settings.look))
             if self.prompter:
                 self.prompter.apply_look(get_look(self.settings.look))
+            self._wake_action.blockSignals(True)
+            self._wake_action.setChecked(bool(self.settings.get("wake/enabled")))
+            self._wake_action.blockSignals(False)
+            self._apply_wake_setting()
 
     def quit(self) -> None:
         self._stop_prompter()
@@ -157,7 +186,12 @@ class HarkApp:
             return
         if self._mode != mode:
             return
+        self._finish_recording(mode)
+
+    def _finish_recording(self, mode: str) -> None:
+        """Key released or a hands-free request ended: gate the audio and send it to the engine."""
         self._mode = None
+        self._wake_session = False
         samples = self.recorder.stop()
         if mode == "dictation":
             win_foreground.suppress_menu_activation()
@@ -282,11 +316,120 @@ class HarkApp:
 
     def _on_audio_frame(self, block: np.ndarray) -> None:
         """Audio thread: tell the teleprompter when it hears speech (not while push-to-talk records)."""
-        prompter = self.prompter
-        if prompter is None or self.recorder.recording:
+        if self._handoff_pending:
+            # A bare wake phrase was just confirmed: start the request with any speech already under way.
+            self._handoff_pending = False
+            seed, flags = self.wake.take()
+            for speaking in flags:
+                self.endpointer.feed(1.0 if speaking else 0.0)
+            self.recorder.start(seed)
+            self._wake_session = True
+        if self._wake_session:
+            if self.recorder.recording and not self._session_closing:
+                verdict = self.endpointer.feed(self._wake_vad.frame_prob(block))
+                if verdict != "continue":
+                    self._session_closing = True
+                    self.bridge.session_done.emit(verdict)
             return
-        if self._prompter_vad.frame_prob(block) >= PROMPTER_SPEECH_THRESHOLD:
-            prompter.mark_speech()
+        prompter = self.prompter
+        if prompter is not None:
+            if not self.recorder.recording and self._prompter_vad.frame_prob(block) >= PROMPTER_SPEECH_THRESHOLD:
+                prompter.mark_speech()
+            return
+        if self._wake_enabled and self._mode is None and not self.recorder.recording:
+            self.wake.feed(block)  # keeps listening while a burst is being checked, so nothing is missed
+
+    # ---- hands-free ("Hey Hark") ----------------------------------------------------
+    def _toggle_wake(self, enabled: bool) -> None:
+        self.settings.set("wake/enabled", enabled)
+        self._apply_wake_setting()
+        phrase = self.settings.get("wake/phrase") or "hey hark"
+        self.hud.show_card(Card(body=f"“{phrase.title()}” is {'on' if enabled else 'off'}."), dismiss_ms=2600)
+
+    def _apply_wake_setting(self) -> None:
+        enabled = bool(self.settings.get("wake/enabled"))
+        if enabled and not self._wake_vad_loading:
+            self._wake_vad_loading = True
+            threading.Thread(target=self._wake_vad.load, name="wake-vad", daemon=True).start()
+        self.wake.reset()
+        self._wake_enabled = enabled
+        log.info("hands-free listening %s", "on" if enabled else "off")
+
+    def _on_wake_burst(self, samples: np.ndarray) -> None:
+        if self._mode is not None or not self._wake_enabled:
+            return
+        if self._wake_busy:
+            # Heard while the previous burst is being checked: it may be the request after "Hey Hark".
+            self._queued_bursts = (self._queued_bursts + [samples])[-MAX_QUEUED_BURSTS:]
+            return
+        self._check_wake(samples)
+
+    def _check_wake(self, samples: np.ndarray) -> None:
+        if battery_saver_on():
+            if not self._told_battery_saver:  # say it once, so a silent Hark isn't a mystery
+                self._told_battery_saver = True
+                self.hud.show_card(Card(body="“Hey Hark” rests while battery saver is on."), dismiss_ms=3200)
+            log.info("battery saver is on; ignoring speech")
+            return
+        self._told_battery_saver = False
+        self._wake_busy = True
+        self.pool.submit(self._send_wake, to_wav_bytes(samples), win_foreground.capture())
+
+    def _send_wake(self, wav: bytes, target: win_foreground.Target | None) -> None:
+        result: dict = {"wake": False}
+        try:
+            info = {"process": target.process, "title": target.title, "app": target.app} if target else {}
+            info["wake_phrase"] = self.settings.get("wake/phrase") or "hey hark"
+            result = self.engine.listen(wav, "wake", info)
+        except Exception:
+            log.exception("wake check failed")
+        result["_mode"] = "command"
+        result["_target"] = target
+        self.bridge.wake_result.emit(result)
+
+    def _on_wake_result(self, result: dict) -> None:
+        self._wake_busy = False
+        queued, self._queued_bursts = self._queued_bursts, []
+        if not result.get("wake"):
+            if queued:  # check what was said meanwhile
+                self._queued_bursts = queued[1:]
+                self._check_wake(queued[0])
+            return
+        if not result.get("follow_up"):
+            self._on_result(result)
+        elif queued:
+            # "Hey Hark … open Spotify": the request already arrived as its own burst.
+            log.info("hands-free request taken from the next burst")
+            self.hud.set_state(HudState.THINKING)
+            self.pool.submit(self._send, to_wav_bytes(queued[0]), "command", result["_target"])
+        else:
+            self._start_wake_session(result["_target"])
+
+    def _start_wake_session(self, target) -> None:
+        """The wake phrase on its own: listen for the request as if the key were held, until a pause.
+        The audio thread starts the recording so it can keep speech that's already under way."""
+        if self._mode is not None:
+            return
+        self._mode = "command"
+        self._target = target
+        self._pressed_at = time.monotonic()
+        self.endpointer.reset()
+        self._session_closing = False
+        self._handoff_pending = True
+        self.hud.set_state(HudState.LISTENING)
+        log.info("hands-free request started")
+
+    def _end_wake_session(self, verdict: str) -> None:
+        if not self._wake_session:
+            return
+        if verdict == "cancel":
+            self._wake_session = False
+            self._mode = None
+            self.recorder.stop()
+            self.hud.rest()
+            log.info("hands-free request cancelled: nothing said")
+            return
+        self._finish_recording("command")
 
     def _show_panel(self) -> None:
         def fetch() -> None:

@@ -35,7 +35,8 @@ class SettingsDialog(QDialog):
             ("dictation/style", "Dictation style", self._combo([
                 ("exact", "Exact: word for word"), ("clean", "Clean: punctuation, no fillers"),
                 ("polished", "Polished: tidied by the AI model")])),
-            ("wake/enabled", "Listen for “Hey Hark”", QCheckBox()),
+            ("wake/enabled", "Listen for the wake phrase", QCheckBox()),
+            ("wake/phrase", "Wake phrase", QLineEdit(placeholderText="hey hark")),
             ("stt/backend", "Speech recognition", self._combo([("parakeet", "Fast (Parakeet)"), ("whisper", "Enhanced (Whisper)")])),
         ]), "Dictation")
         tabs.addTab(self._page([
@@ -54,7 +55,9 @@ class SettingsDialog(QDialog):
             ("llm/model", "Model name (external)", QLineEdit()),
         ]), "Privacy & AI")
 
-        self._note = QLabel("")
+        self._note = QLabel("Hands-free listening transcribes speech it hears nearby to look for the wake phrase, "
+                            "so it uses more CPU in busy rooms. Nothing that isn't meant for Hark is kept.")
+        self._note.setWordWrap(True)
         self._note.setStyleSheet("color: #888")
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._save)

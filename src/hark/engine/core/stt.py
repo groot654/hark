@@ -20,6 +20,8 @@ log = logging.getLogger(__name__)
 
 PARAKEET_MODEL = "nemo-parakeet-tdt-0.6b-v3"
 WHISPER_MODEL = "small"
+SHORT_AUDIO_S = 3.0
+PAD_S = 1.0
 
 
 class SpeechRecognizer:
@@ -62,6 +64,11 @@ class SpeechRecognizer:
     def transcribe(self, samples: np.ndarray, rate: int = 16_000) -> str:
         if samples.size < rate // 4:  # under 250 ms: nothing worth decoding
             return ""
+        if samples.size < rate * SHORT_AUDIO_S:
+            # Parakeet often returns nothing for a short phrase with background noise, unless it
+            # has some quiet around it (63/72 -> 71/72 "Hey Hark" clips heard in tests).
+            pad = np.zeros(int(rate * PAD_S), dtype=samples.dtype)
+            samples = np.concatenate([pad, samples, pad])
         self.ready.wait(timeout=120)
         if self._model is None:
             raise RuntimeError(self.error or "speech recognition is not loaded")

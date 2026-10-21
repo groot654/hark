@@ -5,6 +5,8 @@ app in front, or answers. Speech recognition runs on your PC; nothing is sent to
 
 ## Features
 
+- **Hands-free**: say "Hey Hark, open Spotify", or "Hey Hark", a pause, then the request. Off by default;
+  turn it on from the tray or Settings. Speech not addressed to Hark is dropped without being kept.
 - **Voice commands**: open and close apps and websites, web search, volume and media keys, keyboard shortcuts,
   window control, lock/shutdown (with confirmation), battery and system stats.
 - **Dictation** into any app, in three styles (exact, clean, polished), with spoken punctuation ("comma",

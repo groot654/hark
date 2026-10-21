@@ -60,9 +60,10 @@ class Recorder:
             self._stream.close()
             self._stream = None
 
-    def start(self) -> None:
+    def start(self, seed: list[np.ndarray] | None = None) -> None:
+        """Start collecting; `seed` is audio already heard that belongs to this recording."""
         with self._lock:
-            self._frames = []
+            self._frames = list(seed or [])
             self.recording = True
         self.open()
 

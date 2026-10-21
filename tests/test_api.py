@@ -73,3 +73,40 @@ def test_notify_shows_a_message(client, engine):
     assert client.post("/v1/system/notify", json={"text": "Build finished"}).json() == {"ok": True}
     assert seen == [("notify", {"title": "Hark", "text": "Build finished"})]
     assert client.post("/v1/system/notify", json={"text": ""}).status_code == 422
+
+
+def wav_of(seconds):
+    import io
+    import wave
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(b"\0\0" * int(16000 * seconds))
+    return buf.getvalue()
+
+
+def listen_wake(client, engine, heard):
+    engine.stt.transcribe = lambda samples: heard
+    files = {"audio": ("a.wav", wav_of(1), "audio/wav")}
+    return client.post("/v1/listen", files=files, data={"mode": "wake", "target": "{}"}).json()
+
+
+def test_wake_runs_the_command_after_the_phrase(client, engine):
+    out = listen_wake(client, engine, "Hey hark, take a note that the bins go out Tuesday.")
+    assert out["wake"] is True
+    assert out["transcript"] == "take a note that the bins go out Tuesday."
+    assert out["say"] == "Noted."
+
+
+def test_wake_phrase_alone_asks_for_a_follow_up(client, engine):
+    assert listen_wake(client, engine, "Hey Hark!") == {"transcript": "Hey Hark!", "wake": True, "follow_up": True,
+                                                         "client_actions": []}
+
+
+def test_background_speech_is_dropped_without_its_text(client, engine):
+    assert listen_wake(client, engine, "Hey Mark, take a note") == {"transcript": "", "wake": False,
+                                                                     "client_actions": []}
+    assert client.get("/v1/data/export").json()["notes"] == []

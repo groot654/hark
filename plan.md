@@ -34,7 +34,19 @@ with their own `HARK_DATA_DIR` don't collide with the real one.
 **Tests.** Unit test for the lock; a real check that launches Hark twice and confirms one notch, one set of
 processes, and the message on the first one.
 
-## 2. "Hey Hark" wake phrase `[ ]` (large)
+## 2. "Hey Hark" wake phrase `[x]` (large)
+
+**Result.** Done. Turn it on from the tray ("Listen for “Hey Hark”") or Settings.
+- Recogniser test (3 Windows voices × 3 speeds, light noise): "Hey Hark" found in 50/54 bursts,
+  look-alikes ("Hey Mark", "Hey Park ranger", "I parked", "Hark the herald", "heart rate") rejected 63/63.
+  Short phrases are padded with silence before transcribing, which lifted short noisy clips from 63/72 to 71/72.
+- In the real app with recorded speech: one breath, a 1 s pause, a 2.5 s pause, the phrase alone (cancels
+  after 5 s) and "Hey Mark" (ignored) all behave correctly. About 1 s from end of speech to action.
+- Known limit: fast or slurred speech is sometimes heard as "Hey Mark", which can't be accepted without
+  triggering on the name Mark.
+- This laptop is often in battery saver mode, where hands-free listening rests (Hark now says so once).
+  If you'd rather it kept listening, that can become a setting.
+- Still needed: a try with your own voice and accent.
 
 **Goal.** Say "Hey Hark, open Spotify" without touching a key. Off by default; turned on in Settings.
 

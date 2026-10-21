@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from hark import __version__
 from hark.app.audio_device import from_wav_bytes
-from hark.engine.core import prompts
+from hark.engine.core import prompts, wake
 from hark.engine.core.dictation import format_dictation
 from hark.engine.core.llm import LLMClient, LLMUnavailable
 from hark.engine.core.local_model import MODEL_NAME, LocalModel
@@ -111,6 +111,18 @@ class Engine:
         except LLMUnavailable:
             log.warning("model warm-up failed")
 
+    def _wake(self, transcript: str, target: dict) -> dict:
+        """A burst heard while idle: act only if it opens with the wake phrase. Anything else is
+        background speech, so neither the transcript nor its text in the log is kept."""
+        rest = wake.match(transcript, target.get("wake_phrase") or wake.DEFAULT_PHRASE)
+        if rest is None:
+            log.info("wake phrase not detected")
+            return {"transcript": "", "wake": False, "client_actions": []}
+        log.info("wake phrase heard")
+        if not rest.strip(" .!?"):
+            return {"transcript": transcript, "wake": True, "follow_up": True, "client_actions": []}
+        return {"transcript": rest, "wake": True, **self.orchestrator.handle(rest, target)}
+
     def shutdown(self) -> None:
         if self.local_model is not None:
             self.local_model.stop()
@@ -149,6 +161,8 @@ class Engine:
             transcript = self.stt.transcribe(samples)
             log.info("transcribed %.1fs of audio in %.2fs", samples.size / 16000, time.monotonic() - started)
             target_info = json.loads(target or "{}")
+            if mode == "wake":
+                return self._wake(transcript, target_info)
             if not transcript:
                 return {"transcript": "", "client_actions": []}
             if mode == "dictation":
