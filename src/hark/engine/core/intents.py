@@ -125,6 +125,11 @@ def _task_add2(m):
     return Intent("task.add", {"title": m.group(1)})
 
 
+@rule(r"^what (?:do i (?:have|need) to do|have i got (?:to do|on)|is on my plate)(?: today| now| next)?$")
+def _task_list_casual(m):
+    return Intent("task.list")
+
+
 @rule(r"^(?:what(?:'s| is| are) (?:on )?my (?:to-?do(?: list)?|todo(?: list)?|tasks?(?: list)?)|show (?:me )?my (?:to-?dos?|tasks?)(?: list)?|(?:my )?(?:to-?do|task) list|list (?:my )?tasks)$")
 def _task_list(m):
     return Intent("task.list")
@@ -162,7 +167,8 @@ def _note_search(m):
     return Intent("note.search", {"query": m.group(1)})
 
 
-@rule(r"^(?:show|read|list|open) (?:me )?(?:my )?(?:recent |last )?notes$|^what are my notes$")
+@rule(r"^(?:show|read|list|open) (?:me )?(?:my )?(?:recent |last )?notes$|^what are my notes$|"
+      r"^(?:show me |tell me )?what(?:'s| is) in my notes$")
 def _note_list(m):
     return Intent("note.list")
 

@@ -24,7 +24,7 @@ from hark.engine.core import prompts, wake
 from hark.engine.core.dictation import format_dictation
 from hark.engine.core.intents import Intent
 from hark.engine.core.llm import LLMClient, LLMUnavailable
-from hark.engine.core.local_model import MODEL_NAME, LocalModel
+from hark.engine.core.local_model import LocalModel
 from hark.engine.core.orchestrator import Orchestrator
 from hark.engine.core.stt import SpeechRecognizer
 from hark.engine.eventbus import EventBus, sse_format
@@ -78,7 +78,7 @@ class PolishRequest(BaseModel):
 
 class Engine:
     def __init__(self, stt_backend: str = "parakeet", llm_mode: str = "builtin", llm_url: str = "",
-                 llm_model: str = "", history_days: int = 30) -> None:
+                 llm_model: str = "", history_days: int = 30, llm_size: str = "small") -> None:
         self.history_days = history_days
         self.bus = EventBus()
         self.store = Store(db_path())
@@ -87,7 +87,8 @@ class Engine:
             self.llm.set_endpoint(llm_url, llm_model)
         self.llm_mode = llm_mode
         # An explicit server (settings or HARK_LLM_URL) wins over the built-in model.
-        self.local_model = LocalModel() if llm_mode == "builtin" and not self.llm.config.base_url else None
+        self.local_model = (LocalModel(size=llm_size)
+                            if llm_mode == "builtin" and not self.llm.config.base_url else None)
         self.stt = SpeechRecognizer(stt_backend)
         self.apps = AppIndex()
         self.orchestrator = Orchestrator(self.store, self.llm, self.apps, self.bus)
@@ -109,13 +110,18 @@ class Engine:
         if self.llm_mode == "off":
             return
         if self.local_model is not None:
+            choice = self.local_model.choice
             if not self.local_model.installed:
                 self.bus.publish("notify", title="Setting up the AI model",
-                                 text="Downloading about 570 MB once. Commands work meanwhile.")
+                                 text=f"Downloading about {choice.asset.size / 1e6:.0f} MB once. Commands work meanwhile.")
+            if (free := self.local_model.memory_short()) is not None:
+                self.bus.publish("notify", title="Low on memory",
+                                 text=f"Only {free:.1f} GB is free and this AI model needs about {choice.ram_gb:.1f} GB, "
+                                      "so replies may be slow. A smaller size in Settings helps.")
             try:
-                self.llm.set_endpoint(self.local_model.start(), MODEL_NAME)
+                self.llm.set_endpoint(self.local_model.start(), choice.name)
                 self._warm_llm()
-                self.bus.publish("llm.ready", model=MODEL_NAME)
+                self.bus.publish("llm.ready", model=choice.name)
                 return
             except Exception:
                 log.exception("built-in model unavailable; looking for Ollama")
@@ -333,9 +339,10 @@ def _free_port(preferred: int) -> int:
 
 
 def start_in_thread(stt_backend: str = "parakeet", port: int = DEFAULT_PORT, llm_mode: str = "builtin",
-                    llm_url: str = "", llm_model: str = "", history_days: int = 30) -> tuple[Engine, int]:
+                    llm_url: str = "", llm_model: str = "", history_days: int = 30,
+                    llm_size: str = "small") -> tuple[Engine, int]:
     """Run the engine on a daemon thread; returns once it accepts connections."""
-    engine = Engine(stt_backend, llm_mode, llm_url, llm_model, history_days)
+    engine = Engine(stt_backend, llm_mode, llm_url, llm_model, history_days, llm_size)
     atexit.register(engine.shutdown)
     port = _free_port(port)
     server = uvicorn.Server(uvicorn.Config(engine.build_app(), host="127.0.0.1", port=port, log_level="warning"))

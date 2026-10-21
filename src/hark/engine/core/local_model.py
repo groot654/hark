@@ -46,12 +46,24 @@ LLAMA_SERVER = Asset(
     "e8fbe4e2c00ee4b6706f3c68b7f267f51270ede3ef1d377ffe1c318d70d25eec",
     33_308_213,
 )
-MODEL_NAME = "qwen3.5-0.8b"
-MODEL = Asset(
-    "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf",
-    "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
-    532_517_120,
-)
+@dataclass(frozen=True)
+class ModelChoice:
+    name: str  # what the server calls it
+    asset: Asset
+    ram_gb: float  # free memory it needs to run comfortably
+
+
+_QWEN = "https://huggingface.co/unsloth/{0}-GGUF/resolve/main/{0}-Q4_K_M.gguf"
+MODELS = {
+    "small": ModelChoice("qwen3.5-0.8b", Asset(_QWEN.format("Qwen3.5-0.8B"),
+                         "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517", 532_517_120), 1.0),
+    "medium": ModelChoice("qwen3.5-2b", Asset(_QWEN.format("Qwen3.5-2B"),
+                          "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223", 1_280_835_840), 2.0),
+    "large": ModelChoice("qwen3.5-4b", Asset(_QWEN.format("Qwen3.5-4B"),
+                         "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4", 2_740_937_888), 3.5),
+}
+DEFAULT_SIZE = "small"
+MODEL_NAME = MODELS[DEFAULT_SIZE].name
 CONTEXT_TOKENS = 8192
 START_TIMEOUT = 120
 
@@ -61,10 +73,11 @@ class LocalModelError(RuntimeError):
 
 
 class LocalModel:
-    def __init__(self, root: Path | None = None) -> None:
+    def __init__(self, root: Path | None = None, size: str = DEFAULT_SIZE) -> None:
+        self.choice = MODELS.get(size, MODELS[DEFAULT_SIZE])
         self.root = root or models_dir()
         self.server_dir = self.root / f"llama-{LLAMA_RELEASE}"
-        self.model_path = self.root / "llm" / MODEL.filename
+        self.model_path = self.root / "llm" / self.choice.asset.filename
         self.state = "idle"  # idle | downloading | starting | ready | error | stopped
         self.progress = 0.0  # 0..1 while downloading
         self.error: str | None = None
@@ -75,7 +88,14 @@ class LocalModel:
 
     # ---- status ------------------------------------------------------------------------
     def status(self) -> dict:
-        return {"state": self.state, "progress": round(self.progress, 3), "error": self.error, "model": MODEL_NAME}
+        return {"state": self.state, "progress": round(self.progress, 3), "error": self.error, "model": self.choice.name}
+
+    def memory_short(self) -> float | None:
+        """Free memory in GB when it's less than this model needs, else None."""
+        import psutil
+
+        free = psutil.virtual_memory().available / 1e9
+        return free if free < self.choice.ram_gb else None
 
     @property
     def installed(self) -> bool:
@@ -89,7 +109,7 @@ class LocalModel:
             return
         self.state = "downloading"
         total = (0 if (self.server_dir / "llama-server.exe").exists() else LLAMA_SERVER.size) + \
-                (0 if self.model_path.exists() else MODEL.size)
+                (0 if self.model_path.exists() else self.choice.asset.size)
         done = 0
 
         def report(n: int) -> None:
@@ -113,7 +133,7 @@ class LocalModel:
             archive.unlink(missing_ok=True)
         if not self.model_path.exists():
             self.model_path.parent.mkdir(parents=True, exist_ok=True)
-            _download(MODEL, self.model_path, report)
+            _download(self.choice.asset, self.model_path, report)
         self.progress = 1.0
         self.state = "idle"
 
@@ -142,7 +162,7 @@ class LocalModel:
         args = [
             str(self.server_dir / "llama-server.exe"),
             "--model", str(self.model_path),
-            "--alias", MODEL_NAME,
+            "--alias", self.choice.name,
             "--host", "127.0.0.1",
             "--port", str(port),
             "--ctx-size", str(CONTEXT_TOKENS),

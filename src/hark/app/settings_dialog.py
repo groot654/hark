@@ -14,7 +14,7 @@ from hark.app.settings_store import Settings
 
 AUTOSTART = "general/autostart"
 RESTART_KEYS = {"hotkeys/ptt", "hotkeys/dictation", "hotkeys/panel", "hotkeys/mode", "stt/backend", "audio/microphone",
-                "llm/mode", "llm/url", "llm/model"}
+                "llm/mode", "llm/url", "llm/model", "llm/size"}
 
 
 class SettingsDialog(QDialog):
@@ -56,6 +56,9 @@ class SettingsDialog(QDialog):
             ("llm/mode", "AI model", self._combo([
                 ("builtin", "Built in: Qwen 3.5, runs on this PC"),
                 ("external", "Ollama or another server"), ("off", "Off: commands only")])),
+            ("llm/size", "Built-in model size", self._combo([
+                ("small", "Small: fastest (0.5 GB download)"), ("medium", "Medium: better writing (1.3 GB)"),
+                ("large", "Large: best, needs ~3.5 GB free memory (2.7 GB)")])),
             ("llm/url", "Server address (external)", QLineEdit(placeholderText="Ollama, found automatically")),
             ("llm/model", "Model name (external)", QLineEdit()),
         ]), "Privacy && AI")

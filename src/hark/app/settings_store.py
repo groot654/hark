@@ -21,6 +21,7 @@ DEFAULTS: dict[str, Any] = {
     "tts/enabled": False,
     "history/retention_days": 30,
     "llm/mode": "builtin",  # builtin | external | off
+    "llm/size": "small",  # small (0.8B) | medium (2B) | large (4B), for the built-in model
     "llm/url": "",
     "llm/model": "",
 }
