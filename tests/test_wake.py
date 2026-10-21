@@ -16,6 +16,7 @@ from hark.engine.core.wake import match
         ("Heyhark open notepad", "open notepad"),
         ("Hey harke, lock the screen", "lock the screen"),
         ("Hey hawk, play music", "play music"),
+        ("Eyhardt, yes.", "yes."),  # how one real user's "Hey Hark, yes" was heard
     ],
 )
 def test_wake_phrase_is_found_and_stripped(heard, rest):

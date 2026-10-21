@@ -125,3 +125,55 @@ def stats() -> dict:
 
 def lock_screen() -> None:
     ctypes.windll.user32.LockWorkStation()
+
+
+WM_CLOSE = 0x0010
+
+
+def windows_matching(windows: list[tuple[int, str, str]], names: list[str]) -> list[int]:
+    """Handles of top-level windows that belong to an app: its process name, or a whole-word match in the
+    title ("Calculator", "Untitled - Notepad", "New Tab - Google Chrome"). `windows` is (hwnd, process, title)."""
+    import re
+
+    wanted = [n.lower().strip() for n in names if n and n.strip()]
+    found = []
+    for hwnd, process, title in windows:
+        process = process.lower().removesuffix(".exe")
+        if any(process == w.replace(" ", "") for w in wanted) or any(
+                re.search(rf"(?<!\w){re.escape(w)}(?!\w)", title.lower()) for w in wanted):
+            found.append(hwnd)
+    return found
+
+
+def top_level_windows() -> list[tuple[int, str, str]]:
+    """Visible, titled top-level windows of other processes: (hwnd, process name, title)."""
+    import os
+
+    user32 = ctypes.windll.user32
+    result: list[tuple[int, str, str]] = []
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    def visit(hwnd, _):
+        if user32.IsWindowVisible(hwnd) and user32.GetWindow(hwnd, 4) == 0:  # GW_OWNER: skip owned popups
+            title = ctypes.create_unicode_buffer(256)
+            user32.GetWindowTextW(hwnd, title, 256)
+            pid = ctypes.c_ulong()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            if title.value and pid.value != os.getpid():
+                try:
+                    name = psutil.Process(pid.value).name()
+                except psutil.Error:
+                    name = ""
+                result.append((int(hwnd), name, title.value))
+        return True
+
+    user32.EnumWindows(visit, 0)
+    return result
+
+
+def close_windows(names: list[str]) -> int:
+    """Ask an app's windows to close, as clicking ✕ would (so it can offer to save). Returns how many."""
+    handles = windows_matching(top_level_windows(), names)
+    for hwnd in handles:
+        ctypes.windll.user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+    return len(handles)

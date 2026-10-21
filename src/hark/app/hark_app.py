@@ -89,6 +89,7 @@ class HarkApp:
         self._wake_session = False
         self._session_closing = False
         self._handoff_pending = False
+        self._handsfree = False  # the request in progress began with the wake phrase
         self._queued_bursts: list[np.ndarray] = []
         self._told_battery_saver = False
         self.recorder = Recorder(device=self.settings.microphone or None, on_level=self.bridge.level.emit,
@@ -202,6 +203,7 @@ class HarkApp:
         if down:
             if self._mode is not None:
                 return
+            self._handsfree = False
             self._mode = mode
             self._pressed_at = time.monotonic()
             self._target = win_foreground.capture()
@@ -260,6 +262,10 @@ class HarkApp:
         else:
             self.hud.rest()
         self._pending_confirm = result.get("confirm_id")
+        if self._pending_confirm and self._handsfree:
+            # Hands-free, and Hark asked "…? Say yes or no": listen for the answer without the wake phrase.
+            QTimer.singleShot(400, lambda: self._start_wake_session(target))
+        self._handsfree = False
 
     def _run_client_action(self, action: dict, target) -> None:
         kind = action.get("type")
@@ -434,6 +440,7 @@ class HarkApp:
                 self._queued_bursts = queued[1:]
                 self._check_wake(queued[0])
             return
+        self._handsfree = True
         if not result.get("follow_up"):
             self._on_result(result)
         elif queued:

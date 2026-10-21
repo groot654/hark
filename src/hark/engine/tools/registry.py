@@ -211,6 +211,10 @@ class ToolRegistry:
 
     def _close_app(self, args: dict) -> ToolResult:
         app = self.apps.find(args["name"])
+        # Close its windows the way the ✕ button does: works for Store apps (whose process names differ, e.g.
+        # CalculatorApp.exe) and lets apps offer to save. Ending the process is the fallback.
+        if system.close_windows([args["name"], app.name if app else ""]):
+            return ToolResult(say=f"Closed {args['name']}.")
         wanted = args["name"].lower().replace(" ", "")
         closed = 0
         for proc in psutil.process_iter(["name", "exe"]):

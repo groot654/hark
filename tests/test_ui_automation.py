@@ -105,3 +105,23 @@ def test_never_clicks_inside_hark(store, monkeypatch):
     monkeypatch.setattr(ui, "is_own_window", lambda hwnd: True)
     o = Orchestrator(store, FakeLLM(), NoApps(), EventBus())
     assert "Click into the app" in o.handle("click send", target={"hwnd": 1})["say"]
+
+
+WINDOWS = [
+    (1, "CalculatorApp.exe", "Calculator"),
+    (2, "ApplicationFrameHost.exe", "Calculator"),
+    (3, "notepad.exe", "Untitled - Notepad"),
+    (4, "chrome.exe", "New Tab - Google Chrome"),
+    (5, "KeePass.exe", "Password manager"),
+    (6, "WINWORD.EXE", "Report.docx - Word"),
+]
+
+
+@pytest.mark.parametrize(("names", "expected"), [
+    (["calculator"], [1, 2]), (["notepad"], [3]), (["chrome"], [4]), (["word"], [6]),
+    (["Google Chrome", "chrome"], [4]), (["spotify"], []),
+])
+def test_windows_matching(names, expected):
+    from hark.engine.tools.system import windows_matching
+
+    assert windows_matching(WINDOWS, names) == expected

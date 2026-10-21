@@ -12,10 +12,10 @@ import re
 from difflib import SequenceMatcher
 
 DEFAULT_PHRASE = "hey hark"
-GREETINGS = {"hey", "hay", "hei", "heya", "hi", "ok", "okay", "a", "ay", "eh", "yo"}
+GREETINGS = {"hey", "hay", "hei", "heya", "hi", "ok", "okay", "a", "ay", "eh", "ey", "yo"}
 FILLERS = {"um", "umm", "uh", "uhm", "er", "erm", "so", "well", "oh"}
 # Mishearings of a name that are too far off for the similarity check but still clearly meant.
-NAME_ALIASES = {"hark": {"harke", "harc", "haak", "haark", "hawk", "hork", "harck", "hart"}}
+NAME_ALIASES = {"hark": {"harke", "harc", "haak", "haark", "hawk", "hork", "harck", "hart", "hardt", "harth"}}
 NAME_SIMILARITY = 0.85  # "harke" passes; "mark" and "park" (0.75) don't
 MAX_FILLERS = 2
 WORD = re.compile(r"[a-z0-9']+")

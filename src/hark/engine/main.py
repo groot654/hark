@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import atexit
 import json
+import os
 import logging
 import socket
 import shutil
@@ -38,6 +39,8 @@ from hark.paths import data_dir, db_path, port_file
 log = logging.getLogger("hark.engine")
 
 DEFAULT_PORT = 7861
+# HARK_WAKE_DEBUG=1 logs the text of speech that didn't start with the wake phrase (normally never kept).
+WAKE_DEBUG = os.environ.get("HARK_WAKE_DEBUG") == "1"
 
 
 class ChatRequest(BaseModel):
@@ -183,7 +186,10 @@ class Engine:
         background speech, so neither the transcript nor its text in the log is kept."""
         rest = wake.match(transcript, target.get("wake_phrase") or wake.DEFAULT_PHRASE)
         if rest is None:
-            log.info("wake phrase not detected")
+            if WAKE_DEBUG:  # opt-in: shows what was heard, to tune the matcher
+                log.info("wake phrase not detected in %r", transcript)
+            else:
+                log.info("wake phrase not detected")
             return {"transcript": "", "wake": False, "client_actions": []}
         log.info("wake phrase heard")
         if not rest.strip(" .!?"):
