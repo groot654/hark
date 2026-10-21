@@ -51,6 +51,24 @@ SIZES = {
 CARD_WIDTH = 460
 CARD_MAX_HEIGHT = 400
 PADDING = 16
+TICK_S = 0.033
+
+# Reactions the engine can ask for, and how long each lasts (seconds).
+MOODS = {"love": 2.4, "happy": 1.5, "puzzled": 2.2}
+LOVE_COLOUR = "#ff6fa8"
+HOP_S = 0.35
+HEART_COUNT = 5
+SPI_GETCLIENTAREAANIMATION = 0x1042
+
+
+def animations_enabled() -> bool:
+    """Respect Windows' "Animation effects" setting: when off, reactions skip the hop and float."""
+    try:
+        value = ctypes.c_int(1)
+        ctypes.windll.user32.SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, ctypes.byref(value), 0)
+        return bool(value.value)
+    except (AttributeError, OSError):
+        return True
 
 
 class Hud(QWidget):
@@ -68,6 +86,10 @@ class Hud(QWidget):
         self._size = QSizeF_from(SIZES[HudState.REST])
         self._target = QSizeF_from(SIZES[HudState.REST])
         self._hidden_for_fullscreen = False
+        self.mood: str | None = None
+        self._mood_age = 0.0
+        self._hearts: list[tuple[float, float]] = []  # (side -1..1, start delay)
+        self._animate = animations_enabled()
 
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool | Qt.WindowDoesNotAcceptFocus
@@ -113,6 +135,17 @@ class Hud(QWidget):
             words = len((card.body + " ".join(card.items)).split())
             dismiss_ms = max(4200, min(15_000, 2000 + words * 300))
         self._dismiss.start(dismiss_ms)
+
+    def react(self, mood: str) -> None:
+        """Play a short expression (see MOODS); unknown moods are ignored."""
+        if mood not in MOODS:
+            return
+        self.mood = mood
+        self._mood_age = 0.0
+        self._blink = 1.0
+        self._hearts = [(random.uniform(-1, 1), i * 0.22) for i in range(HEART_COUNT)] if mood == "love" else []
+        if self._hidden_for_fullscreen:
+            self.show()
 
     def rest(self) -> None:
         self.set_state(HudState.REST)
@@ -168,10 +201,21 @@ class Hud(QWidget):
         self._blink_timer.start(random.randint(2500, 6000))
 
     def _on_tick(self) -> None:
-        self._phase += 0.033
+        self._phase += TICK_S
         if self._blink > 0:
             self._blink = max(0.0, self._blink - 0.18)
+        if self.mood:
+            self._mood_age += TICK_S
+            if self._mood_age >= MOODS[self.mood]:
+                self.mood = None
+                self._hearts = []
         self.update()
+
+    def _hop(self) -> float:
+        """Vertical eye offset in px: a small jump at the start of a reaction."""
+        if not self.mood or not self._animate or self._mood_age >= HOP_S:
+            return 0.0
+        return -3.0 * math.sin(self._mood_age / HOP_S * math.pi)
 
     def mousePressEvent(self, _event) -> None:
         self.clicked.emit()
@@ -196,7 +240,12 @@ class Hud(QWidget):
         eye_box = QRectF(rect.left() + 12, rect.top() + 6, 26, min(rect.height(), 44) - 12)
         if self.state == HudState.REST:
             eye_box = QRectF(rect.center().x() - 13, rect.top() + 6, 26, rect.height() - 12)
-        self._paint_eyes(p, eye_box)
+        self._paint_eyes(p, eye_box.translated(0, self._hop()))
+        if self._hearts and self._animate:
+            p.save()
+            p.setClipPath(path)
+            self._paint_hearts(p, rect, eye_box)
+            p.restore()
 
         if self.state in (HudState.LISTENING, HudState.DICTATING):
             self._paint_meter(p, QRectF(eye_box.right() + 12, rect.top() + 8, rect.right() - eye_box.right() - 26, 28))
@@ -210,17 +259,66 @@ class Hud(QWidget):
         color = QColor(self.look.eyes if self.state != HudState.ERROR else "#ff6b6b")
         eye_w = box.width() * 0.32
         open_h = box.height() * 0.78
+        centres = (box.left() + box.width() * 0.25, box.left() + box.width() * 0.75)
+        blink = 1.0 - math.sin(self._blink * math.pi) * 0.9
+        cy = box.center().y()
+
+        if self.mood == "love":
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(LOVE_COLOUR))
+            size = eye_w * 1.45 * (1.0 + 0.08 * math.sin(self._mood_age * 9))  # gentle pulse
+            for cx in centres:
+                p.drawPath(heart_path(QPointF(cx, cy), size))
+            return
+        if self.mood == "happy":
+            # Squashed upward arcs: ^ ^
+            p.setPen(QPen(color, eye_w * 0.42, Qt.SolidLine, Qt.RoundCap))
+            p.setBrush(Qt.NoBrush)
+            arc_w, arc_h = eye_w * 1.05, open_h * 0.55
+            for cx in centres:
+                p.drawArc(QRectF(cx - arc_w / 2, cy - arc_h * 0.4, arc_w, arc_h * 1.2), 15 * 16, 150 * 16)
+            return
+
         # Squint while thinking, wide while listening.
         if self.state == HudState.THINKING:
             open_h *= 0.55
         elif self.state in (HudState.LISTENING, HudState.DICTATING):
             open_h *= 1.0 + self.level * 0.25
-        h = max(2.0, open_h * (1.0 - math.sin(self._blink * math.pi) * 0.9))
         look_x = math.sin(self._phase * 0.7) * 1.5 if self.state == HudState.THINKING else 0.0
+        heights = (open_h, open_h)
+        lift = (0.0, 0.0)
+        if self.mood == "puzzled":
+            # One eye narrowed and raised, both glancing to the side.
+            heights = (open_h, open_h * 0.5)
+            lift = (0.0, -open_h * 0.18)
+            look_x = 1.8
         p.setPen(Qt.NoPen)
         p.setBrush(color)
-        for cx in (box.left() + box.width() * 0.25, box.left() + box.width() * 0.75):
-            p.drawRoundedRect(QRectF(cx - eye_w / 2 + look_x, box.center().y() - h / 2, eye_w, h), eye_w / 2, eye_w / 2)
+        for cx, eye_h, dy in zip(centres, heights, lift):
+            h = max(2.0, eye_h * blink)
+            p.drawRoundedRect(QRectF(cx - eye_w / 2 + look_x, cy - h / 2 + dy, eye_w, h), eye_w / 2, eye_w / 2)
+
+    def _paint_hearts(self, p: QPainter, rect: QRectF, eye_box: QRectF) -> None:
+        """Small hearts float away from the eyes and fade: out towards the ends of the resting pill,
+        or up beside the eyes when a card is open (so they stay clear of the text)."""
+        p.setPen(Qt.NoPen)
+        travel = max(24.0, rect.width() / 2 - eye_box.width() / 2 - 10)
+        for side, delay in self._hearts:
+            t = (self._mood_age - delay) / (MOODS["love"] - delay)
+            if not 0.0 < t < 1.0:
+                continue
+            wobble = math.sin(t * 9 + side * 3) * 1.5
+            if self.state == HudState.REST:
+                direction = -1.0 if side < 0 else 1.0
+                x = eye_box.center().x() + direction * (eye_box.width() / 2 + 4 + t * travel * (0.6 + 0.4 * abs(side)))
+                y = rect.bottom() - 6 - t * (rect.height() - 12) + wobble
+            else:
+                x = eye_box.center().x() + side * eye_box.width() * 0.45 + wobble
+                y = eye_box.bottom() + 22 - t * 30
+            c = QColor(LOVE_COLOUR)
+            c.setAlphaF(max(0.0, 1.0 - t) * 0.9)
+            p.setBrush(c)
+            p.drawPath(heart_path(QPointF(x, y), 7.0 * (0.8 + 0.3 * abs(side))))
 
     def _paint_meter(self, p: QPainter, box: QRectF) -> None:
         color = QColor(self.look.accent if self.state == HudState.LISTENING else self.look.dictation)
@@ -268,6 +366,16 @@ class Hud(QWidget):
                 break
             p.drawText(QRectF(left, y, width, fm.lineSpacing()), Qt.AlignLeft, fm.elidedText("•  " + item, Qt.ElideRight, int(width)))
             y += fm.lineSpacing()
+
+
+def heart_path(centre: QPointF, size: float) -> QPainterPath:
+    """A heart about `size` px wide, centred on `centre`."""
+    s = size / 2
+    x, y = centre.x(), centre.y() + s * 0.1
+    path = QPainterPath(QPointF(x, y + s * 0.9))
+    path.cubicTo(x - s * 1.3, y + s * 0.1, x - s * 0.9, y - s * 1.05, x, y - s * 0.4)
+    path.cubicTo(x + s * 0.9, y - s * 1.05, x + s * 1.3, y + s * 0.1, x, y + s * 0.9)
+    return path
 
 
 def QSizeF_from(size: QSize):

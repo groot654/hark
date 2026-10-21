@@ -188,6 +188,8 @@ class HarkApp:
         elif kind == "look":
             self.settings.look = action["look"]
             self.hud.apply_look(get_look(self.settings.look))
+        elif kind == "mood":
+            self.hud.react(action.get("mood", ""))
 
     def _on_failure(self, message: str) -> None:
         self.hud.show_card(Card(title="Something went wrong", body=message[:200], kind="error"), dismiss_ms=6000)

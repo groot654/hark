@@ -160,6 +160,32 @@ def test_router_search_only_when_asked(store):
     assert o.handle("tell me a joke")["say"] == "Why did the scarecrow win an award?"
 
 
+def moods(out):
+    return [a["mood"] for a in out["client_actions"] if a.get("type") == "mood"]
+
+
+def test_thanks_gets_heart_eyes(store):
+    o, _ = make(store)
+    assert moods(o.handle("thank you so much")) == ["love"]
+
+
+def test_changing_something_gets_a_happy_squint(store):
+    o, _ = make(store)
+    assert moods(o.handle("add buy milk to my list")) == ["happy"]
+    assert moods(o.handle("take a note that the gate code is 4412")) == ["happy"]
+
+
+def test_plain_answers_get_no_reaction(store):
+    o, _ = make(store)
+    assert moods(o.handle("what's on my to-do list")) == []
+
+
+def test_failures_get_a_puzzled_look(store):
+    o, _ = make(store)
+    assert moods(o.handle("remind me to call mum")) == ["puzzled"]  # no time given
+    assert moods(o.handle("tell me something interesting")) == ["puzzled"]  # no model running
+
+
 def test_router_tool_unrelated_to_request_is_ignored(store):
     o, _ = make(store, {"tool": "system.time"}, "Tokyo.")
     assert o.handle("what's the capital of Japan")["say"] == "Tokyo."

@@ -47,6 +47,9 @@ PENDING_TTL = 120
 # Typing and key presses act on whatever window is in front, so when the model (not the user's own
 # words) chose them, ask first.
 MODEL_CONFIRM = frozenset({"input.type", "input.keys"})
+# Commands that change something earn a happy squint in the notch.
+CELEBRATE = frozenset({"task.add", "task.complete", "note.add", "reminder.add", "habit.log", "memory.remember",
+                       "routine.save", "focus.start"})
 # A tool the model picks only runs if the request mentions what that tool is about.
 TOOL_CUES = {name: re.compile(rf"\b(?:{words})", re.I) for name, words in {
     "web.search": r"search|look(?:ing)? (?:up|for)|find|google|browse|online|the web|youtube",
@@ -164,6 +167,8 @@ class Orchestrator:
             if len(steps) > 1:
                 time.sleep(0.6)  # let an app open before the next step acts on it
         combined.say = " ".join(says)
+        if combined.status == "ok" and not _has_mood(combined) and any(s.tool in CELEBRATE for s in steps):
+            combined.client_actions.append(mood("happy"))
         return combined
 
     def _run_one(self, step: Intent) -> ToolResult:
@@ -268,7 +273,8 @@ class Orchestrator:
             )
             decision = json.loads(raw)
         except LLMUnavailable:
-            return ToolResult(say="I didn't catch a command there, and my AI model isn't running yet.")
+            return ToolResult(say="I didn't catch a command there, and my AI model isn't running yet.",
+                              client_actions=[mood("puzzled")])
         except ValueError:
             decision = {}
         tool = decision.get("tool")
@@ -291,13 +297,16 @@ class Orchestrator:
             answer = self.llm.chat([{"role": "system", "content": system}, *history, {"role": "user", "content": text}],
                                    temperature=0.5, max_tokens=220)
         except LLMUnavailable:
-            return ToolResult(say="My AI model isn't running yet, so I can only do commands for now.")
+            return ToolResult(say="My AI model isn't running yet, so I can only do commands for now.",
+                              client_actions=[mood("puzzled")])
         self.store.add_message(self._conversation, "user", text)
         self.store.add_message(self._conversation, "assistant", answer)
         return ToolResult(say=answer, card={"body": answer})
 
     # ---- output ---------------------------------------------------------------------------
     def _finish(self, run_id: str, result: ToolResult, text: str) -> dict:
+        if result.status != "ok" and not _has_mood(result):
+            result.client_actions.append(mood("puzzled"))
         if result.say:
             self.bus.publish("assistant.message", run_id=run_id, text=result.say)
         self.bus.publish("state.changed", run_id=run_id, state="idle")
@@ -310,6 +319,15 @@ class Orchestrator:
         if "confirm_id" in result.data:
             out["confirm_id"] = result.data["confirm_id"]
         return out
+
+
+def mood(name: str) -> dict:
+    """A client action that makes the notch's eyes react: love | happy | puzzled."""
+    return {"type": "mood", "mood": name}
+
+
+def _has_mood(result: ToolResult) -> bool:
+    return any(a.get("type") == "mood" for a in result.client_actions)
 
 
 def tidy_written(text: str, request: str, casual: bool = False) -> str:
