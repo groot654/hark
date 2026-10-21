@@ -48,6 +48,13 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Filename: "{app}\Hark.exe"; Description: "Start Hark now"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
-Filename: "{sys}\taskkill.exe"; Parameters: "/IM Hark.exe /F"; Flags: runhidden; RunOnceId: "StopHark"
+; Stop only the copy installed here: a Hark run from elsewhere (e.g. from source) shares the name.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
+  Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-Process Hark,hark-mcp -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -like '{app}\*' } | Stop-Process -Force"""; \
+  Flags: runhidden waituntilterminated; RunOnceId: "StopHark"
+
+[UninstallDelete]
+; Folders the app made at runtime (e.g. caches) aren't in the uninstall log; clear the whole install folder.
+Type: filesandordirs; Name: "{app}"
 
 ; Settings, history and downloaded models in %LOCALAPPDATA%\hark are kept on uninstall.

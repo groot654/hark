@@ -146,9 +146,19 @@ while open and closes with Esc or a click outside; System Check is a separate sm
 
 **Tests.** Endpoint tests; offscreen renders of every panel state; a real check typing a command.
 
-## 6. Start at sign-in, and an installer `[~]` (medium)
+## 6. Start at sign-in, and an installer `[x]` (medium)
 
-**Result so far.**
+**Result.** Done. `dist\HarkSetup-0.1.0.exe` (80 MB) installs per user with no admin prompt, adds Start-menu
+entries and (optionally) start at sign-in. Tested end to end with a silent install: the installed Hark runs,
+answers commands, and the uninstaller stops it, removes the program, the shortcut and the sign-in entry, and
+keeps your data. Bugs found by these tests and fixed:
+- The first uninstaller stopped *every* process named Hark.exe, which also stopped the Hark you run from
+  source. It now stops only the copy in its own folder.
+- Hark started at sign-in (pythonw, no console) quit at once: the web server's logging setup fails without
+  stderr. It now uses Hark's own logging.
+- Code signing is still not done (a paid certificate); Windows SmartScreen will warn on first install.
+
+**Earlier notes.**
 - Done: Settings → General → "Start Hark when I sign in" (off by default; not switched on for you).
 - Done: `packaging\build.ps1` builds `dist\Hark` (244 MB): `Hark.exe` (no console) and `hark-mcp.exe`
   (console, for MCP clients). The built app was tested as a separate copy: speech model and built-in AI
@@ -190,6 +200,11 @@ cleanly (your data in `%LOCALAPPDATA%\hark` is kept unless you choose to remove 
 
 ## Loose ends to check along the way
 
-- Replies spoken aloud: there's a "tts/enabled" setting, but nothing uses it yet.
-- The "now playing" music card: the engine sends it; the notch's music layout hasn't been checked.
+- Replies spoken aloud: there's a "tts/enabled" setting, but nothing uses it yet. Not built; say if you
+  want it (Windows' own voices would do, no download).
+- "What's playing?": checked. It reads the current media session (it picked up a video playing in Chrome
+  with title, channel and position) and shows a plain text card. heynixi's richer card with artwork and
+  play/pause/next buttons would be a separate feature.
 - Teleprompter pace (155 words a minute) and the eye reactions need a try with your real voice.
+- Found while testing and fixed: hands-free now ignores speech while the PC is locked; the panel is fully
+  opaque; "Privacy & AI" tab name.

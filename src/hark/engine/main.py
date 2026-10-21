@@ -345,7 +345,10 @@ def start_in_thread(stt_backend: str = "parakeet", port: int = DEFAULT_PORT, llm
     engine = Engine(stt_backend, llm_mode, llm_url, llm_model, history_days, llm_size)
     atexit.register(engine.shutdown)
     port = _free_port(port)
-    server = uvicorn.Server(uvicorn.Config(engine.build_app(), host="127.0.0.1", port=port, log_level="warning"))
+    # log_config=None: use the logging Hark already set up. Uvicorn's own setup fails when there is no
+    # stderr at all, which is how Windows starts Hark at sign-in (pythonw / the windowed exe).
+    server = uvicorn.Server(uvicorn.Config(engine.build_app(), host="127.0.0.1", port=port, log_level="warning",
+                                           log_config=None))
     threading.Thread(target=server.run, name="engine", daemon=True).start()
     deadline = time.monotonic() + 15
     while not server.started and time.monotonic() < deadline:
