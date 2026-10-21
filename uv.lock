@@ -262,74 +262,6 @@ wheels = [
 ]
 
 [[package]]
-name = "hark"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "comtypes", marker = "sys_platform == 'win32'" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "keyboard" },
-    { name = "mcp" },
-    { name = "numpy" },
-    { name = "onnx-asr", extra = ["hub"] },
-    { name = "onnxruntime" },
-    { name = "psutil" },
-    { name = "pycaw", marker = "sys_platform == 'win32'" },
-    { name = "pydantic" },
-    { name = "pyside6" },
-    { name = "python-multipart" },
-    { name = "pywin32", marker = "sys_platform == 'win32'" },
-    { name = "sounddevice" },
-    { name = "uvicorn" },
-    { name = "winrt-runtime" },
-    { name = "winrt-windows-foundation" },
-    { name = "winrt-windows-media-control" },
-]
-
-[package.optional-dependencies]
-whisper = [
-    { name = "faster-whisper" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pyinstaller" },
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "comtypes", marker = "sys_platform == 'win32'", specifier = ">=1.4" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "faster-whisper", marker = "extra == 'whisper'", specifier = ">=1.2" },
-    { name = "httpx", specifier = ">=0.28" },
-    { name = "keyboard", specifier = ">=0.13.5" },
-    { name = "mcp", specifier = ">=2.3" },
-    { name = "numpy", specifier = ">=2.1" },
-    { name = "onnx-asr", extras = ["hub"], specifier = ">=0.6" },
-    { name = "onnxruntime", specifier = ">=1.20" },
-    { name = "psutil", specifier = ">=6.1" },
-    { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20240316" },
-    { name = "pydantic", specifier = ">=2.9" },
-    { name = "pyside6", specifier = ">=6.10,<6.11" },
-    { name = "python-multipart", specifier = ">=0.0.20" },
-    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=308" },
-    { name = "sounddevice", specifier = ">=0.5" },
-    { name = "uvicorn", specifier = ">=0.32" },
-    { name = "winrt-runtime", specifier = ">=3.2" },
-    { name = "winrt-windows-foundation", specifier = ">=3.2" },
-    { name = "winrt-windows-media-control", specifier = ">=3.2" },
-]
-provides-extras = ["whisper"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pyinstaller", specifier = ">=6.11" },
-    { name = "pytest", specifier = ">=8.3" },
-]
-
-[[package]]
 name = "hf-xet"
 version = "1.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3325,6 +3257,74 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ad/eb/4e197bf26b023abafc5e9043ec8710d7de0fcb032d0969045236d72aa0b1/starlette-1.9.0.tar.gz", hash = "sha256:3d931de246ed870e35ce605974440816ef895e592f255d1396cfdf191d4c4318", size = 2732466, upload-time = "2026-10-18T15:50:33.189Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f3/93/181df62699d9b5aca1d87e5cfda131dac87e3cdaebf668662f7206ca3470/starlette-1.9.0-py3-none-any.whl", hash = "sha256:fd3f159936e882d06c1108f84688f7cda2cf85fc6a592a50edbd175e882c2ddc", size = 80335, upload-time = "2026-10-18T15:50:31.526Z" },
+]
+
+[[package]]
+name = "togo"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "comtypes", marker = "sys_platform == 'win32'" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "keyboard" },
+    { name = "mcp" },
+    { name = "numpy" },
+    { name = "onnx-asr", extra = ["hub"] },
+    { name = "onnxruntime" },
+    { name = "psutil" },
+    { name = "pycaw", marker = "sys_platform == 'win32'" },
+    { name = "pydantic" },
+    { name = "pyside6" },
+    { name = "python-multipart" },
+    { name = "pywin32", marker = "sys_platform == 'win32'" },
+    { name = "sounddevice" },
+    { name = "uvicorn" },
+    { name = "winrt-runtime" },
+    { name = "winrt-windows-foundation" },
+    { name = "winrt-windows-media-control" },
+]
+
+[package.optional-dependencies]
+whisper = [
+    { name = "faster-whisper" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pyinstaller" },
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "comtypes", marker = "sys_platform == 'win32'", specifier = ">=1.4" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "faster-whisper", marker = "extra == 'whisper'", specifier = ">=1.2" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "keyboard", specifier = ">=0.13.5" },
+    { name = "mcp", specifier = ">=2.3" },
+    { name = "numpy", specifier = ">=2.1" },
+    { name = "onnx-asr", extras = ["hub"], specifier = ">=0.6" },
+    { name = "onnxruntime", specifier = ">=1.20" },
+    { name = "psutil", specifier = ">=6.1" },
+    { name = "pycaw", marker = "sys_platform == 'win32'", specifier = ">=20240316" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyside6", specifier = ">=6.10,<6.11" },
+    { name = "python-multipart", specifier = ">=0.0.20" },
+    { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=308" },
+    { name = "sounddevice", specifier = ">=0.5" },
+    { name = "uvicorn", specifier = ">=0.32" },
+    { name = "winrt-runtime", specifier = ">=3.2" },
+    { name = "winrt-windows-foundation", specifier = ">=3.2" },
+    { name = "winrt-windows-media-control", specifier = ">=3.2" },
+]
+provides-extras = ["whisper"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pyinstaller", specifier = ">=6.11" },
+    { name = "pytest", specifier = ">=8.3" },
 ]
 
 [[package]]

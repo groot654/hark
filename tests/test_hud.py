@@ -5,8 +5,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from hark.app.hud import MOODS, TICK_S, Card, Hud, HudState  # noqa: E402
-from hark.app.look import get_look  # noqa: E402
+from togo.app.hud import MOODS, TICK_S, Card, Hud, HudState  # noqa: E402
+from togo.app.look import get_look  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -66,7 +66,7 @@ def test_every_mood_paints_in_every_state(hud, mood, state):
 @pytest.mark.parametrize(("seconds", "text"), [(1499.2, "25:00"), (59.9, "1:00"), (5, "0:05"), (0, "0:00"),
                                                  (-3, "0:00"), (3900, "1:05:00")])
 def test_format_remaining(seconds, text):
-    from hark.app.hud import format_remaining
+    from togo.app.hud import format_remaining
 
     assert format_remaining(seconds) == text
 
@@ -74,7 +74,7 @@ def test_format_remaining(seconds, text):
 def test_focus_widens_the_resting_pill_and_clears_itself(hud):
     import time
 
-    from hark.app.hud import REST_FOCUS_SIZE, SIZES
+    from togo.app.hud import REST_FOCUS_SIZE, SIZES
 
     hud.set_state(HudState.REST)
     hud.set_focus(time.time() + 600, 1500)
@@ -97,7 +97,7 @@ def test_focus_in_the_past_is_ignored(hud):
 def test_pointer_ring_paints_and_closes_itself(qt):
     import time
 
-    from hark.app.pointer import Pointer
+    from togo.app.pointer import Pointer
 
     ring = Pointer([100, 100, 220, 140], "#5fd7ff", duration_ms=200)
     assert not ring.grab().isNull()
@@ -109,7 +109,7 @@ def test_pointer_ring_paints_and_closes_itself(qt):
 @pytest.mark.parametrize(("ago", "text"), [(10, "now"), (300, "5m"), (3 * 3600, "3h"), (30 * 3600, "yesterday"),
                                            (4 * 86400, "4d")])
 def test_relative_time(ago, text):
-    from hark.app.panel import relative_time
+    from togo.app.panel import relative_time
 
     assert relative_time(1_800_000_000 - ago, now=1_800_000_000) == text
 
@@ -117,14 +117,14 @@ def test_relative_time(ago, text):
 def test_relative_time_older_shows_the_date():
     import datetime as dt
 
-    from hark.app.panel import relative_time
+    from togo.app.panel import relative_time
 
     ts = dt.datetime(2026, 10, 1, 12).timestamp()
     assert relative_time(ts, now=ts + 20 * 86400) == "1 Oct"
 
 
 def test_panel_chat_and_history(qt):
-    from hark.app.panel import Panel
+    from togo.app.panel import Panel
 
     panel = Panel(get_look("arc"))
     sent = []
@@ -147,7 +147,7 @@ def test_panel_chat_and_history(qt):
 
 
 def test_system_check_summary_and_rows(qt):
-    from hark.app.system_check import SystemCheck, summary
+    from togo.app.system_check import SystemCheck, summary
 
     items = [{"name": "Microphone", "status": "ok", "detail": "Fine.", "fix": None},
              {"name": "Memory", "status": "warn", "detail": "0.7 GB free.", "fix": "Close some apps."}]

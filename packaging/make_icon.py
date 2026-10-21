@@ -1,4 +1,4 @@
-"""Draws Hark's icon (the notch pill with its two eyes) into packaging/hark.ico at several sizes."""
+"""Draws Togo's icon (the notch pill with its two eyes) into packaging/togo.ico at several sizes."""
 
 from __future__ import annotations
 
@@ -48,6 +48,6 @@ def write_ico(path: Path) -> None:
 
 if __name__ == "__main__":
     app = QGuiApplication(sys.argv)
-    out = Path(__file__).with_name("hark.ico")
+    out = Path(__file__).with_name("togo.ico")
     write_ico(out)
     print(f"wrote {out} ({out.stat().st_size} bytes)")

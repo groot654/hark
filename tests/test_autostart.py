@@ -2,9 +2,9 @@ import winreg
 
 import pytest
 
-from hark.app import autostart
+from togo.app import autostart
 
-TEST_KEY = r"Software\Hark\test-run"  # never the real Run key
+TEST_KEY = r"Software\Togo\test-run"  # never the real Run key
 
 
 @pytest.fixture
@@ -30,4 +30,4 @@ def test_enable_and_disable(key):
 
 def test_from_source_starts_without_a_console():
     command = autostart.launch_command()
-    assert command.endswith(" -m hark") and "pythonw.exe" in command
+    assert command.endswith(" -m togo") and "pythonw.exe" in command

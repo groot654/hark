@@ -2,7 +2,7 @@ import datetime as dt
 
 import pytest
 
-from hark.engine.tools.timeparse import describe, parse_when, words_to_number
+from togo.engine.tools.timeparse import describe, parse_when, words_to_number
 
 NOW = dt.datetime(2026, 10, 21, 10, 0, 0)
 

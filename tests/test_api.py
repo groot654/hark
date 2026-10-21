@@ -2,8 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import FakeLLM
-from hark.engine.main import Engine
-from hark.engine.security import HEADER
+from togo.engine.main import Engine
+from togo.engine.security import HEADER
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def test_requests_without_token_are_rejected(engine):
 
 
 def test_token_written_for_client(engine):
-    from hark.engine.security import read_token
+    from togo.engine.security import read_token
 
     assert read_token() == engine.token
 
@@ -71,7 +71,7 @@ def test_notify_shows_a_message(client, engine):
     seen = []
     engine.bus.publish = lambda kind, **data: seen.append((kind, data))
     assert client.post("/v1/system/notify", json={"text": "Build finished"}).json() == {"ok": True}
-    assert seen == [("notify", {"title": "Hark", "text": "Build finished"})]
+    assert seen == [("notify", {"title": "Togo", "text": "Build finished"})]
     assert client.post("/v1/system/notify", json={"text": ""}).status_code == 422
 
 
@@ -95,14 +95,14 @@ def listen_wake(client, engine, heard):
 
 
 def test_wake_runs_the_command_after_the_phrase(client, engine):
-    out = listen_wake(client, engine, "Hey hark, take a note that the bins go out Tuesday.")
+    out = listen_wake(client, engine, "Hey togo, take a note that the bins go out Tuesday.")
     assert out["wake"] is True
     assert out["transcript"] == "take a note that the bins go out Tuesday."
     assert out["say"] == "Noted."
 
 
 def test_wake_phrase_alone_asks_for_a_follow_up(client, engine):
-    assert listen_wake(client, engine, "Hey Hark!") == {"transcript": "Hey Hark!", "wake": True, "follow_up": True,
+    assert listen_wake(client, engine, "Hey Togo!") == {"transcript": "Hey Togo!", "wake": True, "follow_up": True,
                                                          "client_actions": []}
 
 

@@ -5,7 +5,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 import pytest
 
-from hark.engine.core.local_model import Asset, LocalModel, LocalModelError, _download
+from togo.engine.core.local_model import Asset, LocalModel, LocalModelError, _download
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def test_status_before_start(tmp_path):  # small by default
 
 
 def test_sizes_have_pinned_files_and_names(tmp_path):
-    from hark.engine.core.local_model import MODELS
+    from togo.engine.core.local_model import MODELS
 
     assert list(MODELS) == ["small", "medium", "large"]
     for size, choice in MODELS.items():

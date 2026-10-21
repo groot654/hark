@@ -4,13 +4,13 @@ import json
 
 import pytest
 
-from hark.engine.core.llm import LLMUnavailable
-from hark.engine.store.sqlite_store import Store
+from togo.engine.core.llm import LLMUnavailable
+from togo.engine.store.sqlite_store import Store
 
 
 @pytest.fixture(autouse=True)
 def _isolated_data_dir(tmp_path, monkeypatch):
-    monkeypatch.setenv("HARK_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("TOGO_DATA_DIR", str(tmp_path / "data"))
 
 
 @pytest.fixture

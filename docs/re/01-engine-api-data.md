@@ -572,7 +572,7 @@ Tools. `inputSchema` is `{type:"object", properties, required}`. Arg names of 5 
 4. **WebSocket `/v1/events`:** `browser_origin_is_trusted(origin)`. A missing Origin is treated as a native client and allowed. An untrusted Origin causes close code 1008. Rationale from the docstring: "CORS does not apply to WebSocket handshakes … prevents an arbitrary web page from subscribing to local speech and action events."
 5. **Integrations surface:** limited to the allow-list; nothing there can type, click or open things.
 
-For hark: either replicate this guard, or add a per-launch random token written next to `engine.port`. Adding a token would be strictly stronger, because any local process can currently call the API.
+For togo: either replicate this guard, or add a per-launch random token written next to `engine.port`. Adding a token would be strictly stronger, because any local process can currently call the API.
 
 ---
 

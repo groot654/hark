@@ -1,13 +1,13 @@
 import pytest
 
-from hark.engine.core.intents import match, match_one, normalise
+from togo.engine.core.intents import match, match_one, normalise
 
 
 @pytest.mark.parametrize(
     ("spoken", "expected"),
     [
-        ("Hey Hark, could you open Spotify please?", "open Spotify"),
-        ("hark can you please mute", "mute"),
+        ("Hey Togo, could you open Spotify please?", "open Spotify"),
+        ("togo can you please mute", "mute"),
         ("what time is it now?", "what time is it"),
         ("  lock the screen, thanks.  ", "lock the screen"),
     ],
@@ -91,7 +91,7 @@ def test_commands(spoken, tool, args):
 
 
 def test_timer_text_parses_as_a_relative_time():
-    from hark.engine.tools.timeparse import parse_when
+    from togo.engine.tools.timeparse import parse_when
 
     intent = match_one("set a timer for five minutes")
     assert parse_when(intent.args["text"]) is not None

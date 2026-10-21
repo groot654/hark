@@ -1,6 +1,6 @@
 import pytest
 
-from hark.engine.core.recall import recall, second_person
+from togo.engine.core.recall import recall, second_person
 
 MEMORIES = [
     {"key": "my name is rauf", "value": "My name is Rauf"},

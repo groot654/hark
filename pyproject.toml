@@ -1,5 +1,5 @@
 [project]
-name = "hark"
+name = "togo"
 version = "0.1.0"
 description = "Local voice assistant for Windows: push-to-talk commands, dictation and an on-device AI model."
 requires-python = ">=3.12,<3.13"
@@ -29,7 +29,7 @@ dependencies = [
 whisper = ["faster-whisper>=1.2"]
 
 [project.scripts]
-hark = "hark.__main__:main"
+togo = "togo.__main__:main"
 
 [dependency-groups]
 dev = ["pytest>=8.3", "pyinstaller>=6.11"]
@@ -39,7 +39,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/hark"]
+packages = ["src/togo"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

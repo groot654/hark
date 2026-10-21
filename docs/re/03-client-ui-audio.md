@@ -1,7 +1,7 @@
 # 03 — heynixi desktop client: UI, mascot, dictation, audio
 
 Scope: every `app.*` module of heynixi 0.2.1 (build `19c58a3`, built 2026-10-18), the Windows PySide6 client.
-Target: the spec for the "hark" reimplementation.
+Target: the spec for the "togo" reimplementation.
 
 ## 0. Method and conventions
 

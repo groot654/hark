@@ -5,8 +5,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from hark.app.look import get_look  # noqa: E402
-from hark.app.teleprompter import LINE_HEIGHT, ScriptPacer, Teleprompter, wrap_lines  # noqa: E402
+from togo.app.look import get_look  # noqa: E402
+from togo.app.teleprompter import LINE_HEIGHT, ScriptPacer, Teleprompter, wrap_lines  # noqa: E402
 
 SCRIPT = "one two three four five six seven eight\n\nnine ten eleven twelve"
 

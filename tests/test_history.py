@@ -1,9 +1,9 @@
 import pytest
 
 from conftest import FakeLLM, NoApps
-from hark.engine.core import orchestrator as orch_module
-from hark.engine.core.orchestrator import Orchestrator
-from hark.engine.eventbus import EventBus
+from togo.engine.core import orchestrator as orch_module
+from togo.engine.core.orchestrator import Orchestrator
+from togo.engine.eventbus import EventBus
 
 
 @pytest.fixture

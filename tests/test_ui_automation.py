@@ -1,7 +1,7 @@
 import pytest
 
-from hark.engine.tools import ui_automation as ui
-from hark.engine.tools.ui_automation import Control, pick, split_role
+from togo.engine.tools import ui_automation as ui
+from togo.engine.tools.ui_automation import Control, pick, split_role
 
 WINDOW = [
     Control("Send", "Button", (10, 10, 60, 30)),
@@ -65,8 +65,8 @@ def fake_window(monkeypatch):
 
 def test_click_presses_and_shows_where(store, fake_window):
     from conftest import FakeLLM, NoApps
-    from hark.engine.core.orchestrator import Orchestrator
-    from hark.engine.eventbus import EventBus
+    from togo.engine.core.orchestrator import Orchestrator
+    from togo.engine.eventbus import EventBus
 
     o = Orchestrator(store, FakeLLM(), NoApps(), EventBus())
     out = o.handle("click send", target={"hwnd": 4242})
@@ -76,8 +76,8 @@ def test_click_presses_and_shows_where(store, fake_window):
 
 def test_unclear_click_asks_first(store, fake_window):
     from conftest import FakeLLM, NoApps
-    from hark.engine.core.orchestrator import Orchestrator
-    from hark.engine.eventbus import EventBus
+    from togo.engine.core.orchestrator import Orchestrator
+    from togo.engine.eventbus import EventBus
 
     o = Orchestrator(store, FakeLLM(), NoApps(), EventBus())
     out = o.handle("click later")
@@ -89,18 +89,18 @@ def test_unclear_click_asks_first(store, fake_window):
 
 def test_missing_control_says_so(store, fake_window):
     from conftest import FakeLLM, NoApps
-    from hark.engine.core.orchestrator import Orchestrator
-    from hark.engine.eventbus import EventBus
+    from togo.engine.core.orchestrator import Orchestrator
+    from togo.engine.eventbus import EventBus
 
     o = Orchestrator(store, FakeLLM(), NoApps(), EventBus())
     out = o.handle("click checkout")
     assert out["status"] == "error" and "can't see" in out["say"]
 
 
-def test_never_clicks_inside_hark(store, monkeypatch):
+def test_never_clicks_inside_togo(store, monkeypatch):
     from conftest import FakeLLM, NoApps
-    from hark.engine.core.orchestrator import Orchestrator
-    from hark.engine.eventbus import EventBus
+    from togo.engine.core.orchestrator import Orchestrator
+    from togo.engine.eventbus import EventBus
 
     monkeypatch.setattr(ui, "is_own_window", lambda hwnd: True)
     o = Orchestrator(store, FakeLLM(), NoApps(), EventBus())
@@ -122,6 +122,6 @@ WINDOWS = [
     (["Google Chrome", "chrome"], [4]), (["spotify"], []),
 ])
 def test_windows_matching(names, expected):
-    from hark.engine.tools.system import windows_matching
+    from togo.engine.tools.system import windows_matching
 
     assert windows_matching(WINDOWS, names) == expected

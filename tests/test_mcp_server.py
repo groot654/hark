@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from hark import mcp_server
+from togo import mcp_server
 
 
 @pytest.fixture
@@ -25,7 +25,7 @@ def test_lists_are_numbered(engine_calls):
     assert mcp_server.list_tasks() == "To-do:\n1. a\n2. b"
 
 
-def test_arguments_map_to_hark_tools(engine_calls):
+def test_arguments_map_to_togo_tools(engine_calls):
     mcp_server.add_task("buy milk")
     mcp_server.search_notes("")
     mcp_server.search_notes("wifi")
@@ -39,18 +39,18 @@ def test_arguments_map_to_hark_tools(engine_calls):
 
 
 def test_failures_become_tool_errors(engine_calls):
-    with pytest.raises(mcp_server.HarkError, match="couldn't find"):
+    with pytest.raises(mcp_server.TogoError, match="couldn't find"):
         mcp_server.complete_task("nothing like this")
 
 
 def test_notify_uses_the_notch_endpoint(engine_calls):
     assert mcp_server.notify("Build finished") == "Shown."
-    assert engine_calls == [("/v1/system/notify", {"text": "Build finished", "title": "Hark"})]
+    assert engine_calls == [("/v1/system/notify", {"text": "Build finished", "title": "Togo"})]
 
 
 def test_not_running(tmp_path, monkeypatch):
-    monkeypatch.setenv("HARK_DATA_DIR", str(tmp_path / "empty"))
-    with pytest.raises(mcp_server.HarkError, match="isn't running"):
+    monkeypatch.setenv("TOGO_DATA_DIR", str(tmp_path / "empty"))
+    with pytest.raises(mcp_server.TogoError, match="isn't running"):
         mcp_server.list_tasks()
 
 

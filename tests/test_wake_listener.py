@@ -1,6 +1,6 @@
 import numpy as np
 
-from hark.app.wake_listener import BurstCollector, Endpointer, frames
+from togo.app.wake_listener import BurstCollector, Endpointer, frames
 
 SILENT, SPEECH = 0, 1
 

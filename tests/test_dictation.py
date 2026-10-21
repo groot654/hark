@@ -1,8 +1,8 @@
 import pytest
 
 from conftest import FakeLLM
-from hark.engine.core.dictation import app_style, clean, expand_snippet, format_dictation, polish
-from hark.engine.core.transcript_filter import is_noise
+from togo.engine.core.dictation import app_style, clean, expand_snippet, format_dictation, polish
+from togo.engine.core.transcript_filter import is_noise
 
 
 @pytest.mark.parametrize(
@@ -46,8 +46,8 @@ def test_code_style_keeps_case():
 
 
 def test_dictionary_replacements():
-    assert clean("ping hark about cooper netties", "formal", {"cooper netties": "Kubernetes"}) == \
-        "Ping hark about Kubernetes."
+    assert clean("ping togo about cooper netties", "formal", {"cooper netties": "Kubernetes"}) == \
+        "Ping togo about Kubernetes."
 
 
 def test_app_style():

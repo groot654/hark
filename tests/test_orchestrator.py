@@ -1,9 +1,9 @@
 import pytest
 
 from conftest import FakeLLM, NoApps
-from hark.engine.core import orchestrator as orch_module
-from hark.engine.core.orchestrator import Orchestrator
-from hark.engine.eventbus import EventBus
+from togo.engine.core import orchestrator as orch_module
+from togo.engine.core.orchestrator import Orchestrator
+from togo.engine.eventbus import EventBus
 
 
 @pytest.fixture(autouse=True)
@@ -206,14 +206,14 @@ def test_agent_plan_with_typing_is_confirmed_first(store):
 
 
 def test_tidy_written_email():
-    from hark.engine.core.orchestrator import tidy_written
+    from togo.engine.core.orchestrator import tidy_written
 
     raw = "Subject: Late\n\nDear [Manager's Name],\n\nI'll be late tomorrow.\n\nBest regards,\n[Your Name]"
     assert tidy_written(raw, "an email to my manager") == "Hi,\n\nI'll be late tomorrow.\n\nBest regards"
 
 
 def test_tidy_written_chat_drops_bare_greeting():
-    from hark.engine.core.orchestrator import tidy_written
+    from togo.engine.core.orchestrator import tidy_written
 
     assert tidy_written("Hi,\n\nSounds good. See you at 7.", "reply", casual=True) == "Sounds good. See you at 7."
 

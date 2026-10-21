@@ -1,7 +1,7 @@
 import time
 
-from hark.engine.eventbus import EventBus
-from hark.engine.reminders import ReminderScheduler
+from togo.engine.eventbus import EventBus
+from togo.engine.reminders import ReminderScheduler
 
 
 def test_settings_round_trip(store):
