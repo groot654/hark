@@ -273,9 +273,20 @@ def _now_playing(m):
 
 
 # ---- keys & typing -----------------------------------------------------------------------
-@rule(r"^(?:press|hit|push|tap) (?:the )?(.+?)(?: key| button)?(?: (\w+) times)?$")
+KEY_WORDS = {
+    "ctrl", "control", "alt", "shift", "windows", "win", "enter", "return", "escape", "esc", "space", "spacebar",
+    "tab", "backspace", "delete", "del", "insert", "up", "down", "left", "right", "home", "end", "page", "plus",
+    "minus", "and", "+", "-", *"abcdefghijklmnopqrstuvwxyz0123456789", *(f"f{i}" for i in range(1, 25)),
+}
+
+
+@rule(r"^(?:press|hit|push|tap) (?:the )?(.+?)( key| button)?(?: (\w+) times)?$")
 def _press(m):
-    return Intent("input.keys", {"keys": m.group(1), "times": _num(m.group(2)) if m.group(2) else 1})
+    """Key names ("press control s") are key presses; anything else ("press the save button") is a control."""
+    words = m.group(1).lower().replace("+", " + ").split()
+    if m.group(2) != " button" and all(w in KEY_WORDS for w in words):
+        return Intent("input.keys", {"keys": m.group(1), "times": _num(m.group(3)) if m.group(3) else 1})
+    return Intent("ui.click", {"name": m.group(1) + (m.group(2) or "")})
 
 
 @rule(r"^(?:type|type out|enter)[:,]? (.+)$")
@@ -373,6 +384,25 @@ def _prompter_stop(m):
 @rule(r"^(?:change|switch|set) (?:your )?(?:colou?rs?|look|theme) to (\w+)$")
 def _look(m):
     return Intent("look.set", {"look": m.group(1).lower()})
+
+
+# ---- controls on screen ----------------------------------------------------------------------
+@rule(r"^(?:click|double[- ]click|left click|select|choose|toggle|tick|untick)(?: on)? (?:the )?(.+)$")
+def _click(m):
+    return Intent("ui.click", {"name": m.group(1)})
+
+
+@rule(r"^open (?:the )?(.+?) menu$")
+def _open_menu(m):
+    if m.group(1).lower() == "start":
+        return Intent("input.keys", {"keys": "windows"})
+    return Intent("ui.click", {"name": f"{m.group(1)} menu"})
+
+
+@rule(r"^(?:point (?:at|to)|highlight|show me where) (?:the )?(.+?)(?: is)?$|"
+      r"^where(?:'s| is) (?:the )?(.+? (?:button|link|tab|menu|box|field|icon|option|checkbox|check box))$")
+def _point(m):
+    return Intent("ui.point", {"name": m.group(1) or m.group(2)})
 
 
 # ---- web & apps (last: "open X" is the broadest pattern) ---------------------------------------

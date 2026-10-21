@@ -92,3 +92,15 @@ def test_focus_in_the_past_is_ignored(hud):
 
     hud.set_focus(time.time() - 5, 60)
     assert hud.focus_remaining is None
+
+
+def test_pointer_ring_paints_and_closes_itself(qt):
+    import time
+
+    from hark.app.pointer import Pointer
+
+    ring = Pointer([100, 100, 220, 140], "#5fd7ff", duration_ms=200)
+    assert not ring.grab().isNull()
+    ring.started = time.monotonic() - 1
+    ring._tick()
+    assert not ring.isVisible()

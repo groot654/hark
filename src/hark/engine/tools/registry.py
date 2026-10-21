@@ -18,7 +18,7 @@ import psutil
 
 from hark.engine.core.intents import Intent
 from hark.engine.store.sqlite_store import Store
-from hark.engine.tools import system
+from hark.engine.tools import system, ui_automation
 from hark.engine.tools.app_index import AppIndex
 from hark.engine.tools.timeparse import describe, parse_when
 
@@ -125,6 +125,8 @@ class ToolRegistry:
         add("input.keys", "Press a key or shortcut in the window in front. args: {keys, times}", self._keys)
         add("input.type", "Type text into the window in front. args: {text}",
             lambda a: ToolResult(say="", client_actions=[{"type": "insert_text", "text": a["text"]}]))
+        add("ui.click", "Click a button, link, tab, menu or field in the window in front. args: {name}", self._ui_click)
+        add("ui.point", "Show where a button or field is in the window in front. args: {name}", self._ui_point)
         add("window.minimise", "Minimise the window in front", lambda a: self._ok(system.press_keys("windows+down"), ""))
         add("window.maximise", "Maximise the window in front", lambda a: self._ok(system.press_keys("windows+up"), ""))
 
@@ -227,6 +229,40 @@ class ToolRegistry:
             system.press_keys(combo)
         return ToolResult(say="")
 
+    def _find_control(self, args: dict) -> ui_automation.Pick | ToolResult:
+        hwnd = int(args.get("hwnd") or ui_automation.foreground_window())
+        if not hwnd or ui_automation.is_own_window(hwnd):
+            return ToolResult(status="error", say="Click into the app you want first, then ask again.")
+        try:
+            controls = ui_automation.list_controls(hwnd)
+        except TimeoutError:
+            return ToolResult(status="error", say="That window took too long to read.")
+        except Exception:
+            log.exception("reading window controls failed")
+            return ToolResult(status="error", say="I couldn't read the controls in that window.")
+        choice = ui_automation.pick(args["name"], controls)
+        if choice.control is None:
+            return ToolResult(status="error", say=f"I can't see “{args['name']}” in this window.")
+        return choice
+
+    def _ui_click(self, args: dict) -> ToolResult:
+        choice = self._find_control(args)
+        if isinstance(choice, ToolResult):
+            return choice
+        control = choice.control
+        if not choice.clear and not args.get("confirmed"):
+            again = Intent("ui.click", {**args, "confirmed": True}, f"click {control.name}")
+            return ToolResult(say=f"Click “{control.name}”?", data={"ask": again})
+        how = ui_automation.press(control)
+        log.info("clicked a %s via %s (match %.2f)", control.kind, how, choice.score)
+        return ToolResult(client_actions=[point_action(control, 900)])
+
+    def _ui_point(self, args: dict) -> ToolResult:
+        choice = self._find_control(args)
+        if isinstance(choice, ToolResult):
+            return choice
+        return ToolResult(say=f"There's “{choice.control.name}”.", client_actions=[point_action(choice.control, 2500)])
+
     def _now_playing(self, _args: dict) -> ToolResult:
         from hark.engine.tools.now_playing import current
 
@@ -293,6 +329,11 @@ class ToolRegistry:
         if not ended:
             return ToolResult(say="There's no focus session running.")
         return ToolResult(say="Focus session stopped.", client_actions=[focus_action(None)])
+
+
+def point_action(control: ui_automation.Control, duration_ms: int) -> dict:
+    """Client action: draw a ring around a control (rect in physical screen pixels)."""
+    return {"type": "point", "rect": list(control.rect), "duration_ms": duration_ms}
 
 
 def focus_action(session: dict | None) -> dict:

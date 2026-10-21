@@ -21,6 +21,7 @@ from hark.app.engine_client import EngineClient
 from hark.app.hotkeys import HotkeyConfig, Hotkeys
 from hark.app.hud import Card, Hud, HudState
 from hark.app.look import get_look
+from hark.app.pointer import Pointer
 from hark.app.settings_store import Settings
 from hark.app.teleprompter import Teleprompter
 from hark.app.vad import SileroVad
@@ -209,7 +210,7 @@ class HarkApp:
 
     def _send(self, wav: bytes, mode: str, target: win_foreground.Target | None) -> None:
         try:
-            info = {"process": target.process, "title": target.title, "app": target.app} if target else {}
+            info = target_info(target)
             info["dictation_style"] = self.settings.dictation_style
             result = self.engine.listen(wav, mode, info)
             result["_mode"] = mode
@@ -242,6 +243,8 @@ class HarkApp:
         elif kind == "look":
             self.settings.look = action["look"]
             self.hud.apply_look(get_look(self.settings.look))
+        elif kind == "point":
+            Pointer(action["rect"], self.hud.look.accent, action.get("duration_ms", 1200))
         elif kind == "mood":
             self.hud.react(action.get("mood", ""))
         elif kind == "focus":
@@ -381,7 +384,7 @@ class HarkApp:
     def _send_wake(self, wav: bytes, target: win_foreground.Target | None) -> None:
         result: dict = {"wake": False}
         try:
-            info = {"process": target.process, "title": target.title, "app": target.app} if target else {}
+            info = target_info(target)
             info["wake_phrase"] = self.settings.get("wake/phrase") or "hey hark"
             result = self.engine.listen(wav, "wake", info)
         except Exception:
@@ -443,3 +446,10 @@ class HarkApp:
                 self.bridge.failure.emit(str(exc))
 
         self.pool.submit(fetch)
+
+
+def target_info(target: win_foreground.Target | None) -> dict:
+    """What the engine needs to know about the window that was in front when the user spoke."""
+    if target is None:
+        return {}
+    return {"process": target.process, "title": target.title, "app": target.app, "hwnd": target.hwnd}

@@ -42,6 +42,17 @@ def test_normalise_strips_wake_word_and_politeness(spoken, expected):
         ("press tab three times", "input.keys", {"keys": "tab", "times": 3}),
         ("close this tab", "input.keys", {"keys": "ctrl w"}),
         ("type hello world", "input.type", {"text": "hello world"}),
+        ("press enter", "input.keys", {"keys": "enter"}),
+        ("press control s", "input.keys", {"keys": "control s"}),
+        ("press the save button", "ui.click", {"name": "save button"}),
+        ("press save", "ui.click", {"name": "save"}),
+        ("click send", "ui.click", {"name": "send"}),
+        ("click on the File menu", "ui.click", {"name": "File menu"}),
+        ("open the file menu", "ui.click", {"name": "file menu"}),
+        ("open the start menu", "input.keys", {"keys": "windows"}),
+        ("select the bold tab", "ui.click", {"name": "bold tab"}),
+        ("point at the search box", "ui.point", {"name": "search box"}),
+        ("where's the send button", "ui.point", {"name": "send button"}),
         ("remember that my sister's name is Ayesha", "memory.remember", {"fact": "my sister's name is Ayesha"}),
         ("forget about my sister", "memory.forget", {"needle": "my sister"}),
         ("remind me in 10 minutes to call mum", "reminder.add", {"text": "in 10 minutes to call mum"}),
@@ -108,3 +119,7 @@ def test_searches_are_never_split():
     steps = match("search for cats and dogs")
     assert [s.tool for s in steps] == ["web.search"]
     assert steps[0].args["query"] == "cats and dogs"
+
+
+def test_where_is_a_place_is_not_a_control():
+    assert match_one("where is the Eiffel Tower") is None

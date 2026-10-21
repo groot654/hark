@@ -79,6 +79,7 @@ class Orchestrator:
         self.bus = bus
         self.tools = ToolRegistry(store, apps)
         self._pending: dict[str, Pending] = {}
+        self._target: dict = {}
         self._conversation: int | None = None
         self._last_turn = 0.0
 
@@ -118,6 +119,7 @@ class Orchestrator:
     # ---- pipeline ------------------------------------------------------------------------
     def _dispatch(self, text: str, target: dict, selection: str | None) -> ToolResult:
         phrase = normalise(text)
+        self._target = target
 
         if self._pending and (YES.match(phrase) or NO.match(phrase)):
             confirm_id = max(self._pending, key=lambda k: self._pending[k].created)
@@ -156,6 +158,16 @@ class Orchestrator:
             self.bus.publish("plan.step.started", index=i, tool=step.tool, args=step.args)
             result = self._run_one(step)
             self.bus.publish("tool.result", tool=step.tool, status=result.status, message=result.say)
+            follow_up = result.data.pop("ask", None)
+            if follow_up is not None:
+                # The tool wants a yes before acting (e.g. an unclear click): park it and the steps after it.
+                confirm_id = uuid.uuid4().hex
+                self._pending[confirm_id] = Pending([follow_up, *steps[i + 1:]])
+                self.bus.publish("state.changed", state="confirming")
+                combined.say = " ".join([*says, result.say])
+                combined.data["confirm_id"] = confirm_id
+                combined.card = {"title": "Confirm", "body": result.say + " Say yes or no.", "kind": "reply"}
+                return combined
             if result.say:
                 says.append(result.say)
             combined.client_actions += result.client_actions
@@ -172,6 +184,8 @@ class Orchestrator:
         return combined
 
     def _run_one(self, step: Intent) -> ToolResult:
+        if step.tool.startswith("ui.") and "hwnd" not in step.args and self._target.get("hwnd"):
+            step.args["hwnd"] = self._target["hwnd"]  # the window that was in front when the user spoke
         if step.tool == "routine.save":
             return self._save_routine(step.args["name"], step.args["steps"])
         if step.tool == "routine.run":

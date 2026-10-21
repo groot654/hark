@@ -73,7 +73,16 @@ end-to-end with recorded Windows voices; then your own voice, which I can't test
 **Decision.** Wake phrase stays "Hey Hark" **(default)**. A two-syllable name triggers by accident less
 often; we can revisit after real use.
 
-## 3. Clicking things on screen `[ ]` (medium)
+## 3. Clicking things on screen `[x]` (medium)
+
+**Result.** Done. "Click send", "press the save button", "select the bold tab", "open the File menu",
+"point at the search box", "where's the send button?".
+- Real check on Calculator: "click 7", "click plus", "press the three button", "click equals" gave
+  "Display is 10"; each click took 0.03–0.16 s and the highlight ring lands exactly on the control at
+  this PC's 125% scaling.
+- "Press …" stays a key press when every word is a key name ("press control s", "press enter").
+- An unclear match ("click later" → "Send later") asks first; a missing one says so; Hark never clicks
+  in its own windows. A general "ask before acting" hook was added for tools.
 
 **Goal.** "Click the send button", "press Save", "open the File menu", "where's the search box?"
 
