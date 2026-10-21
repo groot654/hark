@@ -24,7 +24,7 @@ from hark.app.look import get_look
 from hark.app.settings_store import Settings
 from hark.app.teleprompter import Teleprompter
 from hark.app.vad import SileroVad
-from hark.app.wake_listener import BurstCollector, Endpointer, battery_saver_on
+from hark.app.wake_listener import BurstCollector, Endpointer, battery_saver_on, session_locked
 
 log = logging.getLogger("hark.client")
 
@@ -365,6 +365,9 @@ class HarkApp:
         self._check_wake(samples)
 
     def _check_wake(self, samples: np.ndarray) -> None:
+        if session_locked():
+            log.info("session is locked; ignoring speech")
+            return
         if battery_saver_on():
             if not self._told_battery_saver:  # say it once, so a silent Hark isn't a mystery
                 self._told_battery_saver = True

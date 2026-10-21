@@ -9,6 +9,7 @@ a bare "Hey Hark" is over. Both work on 32 ms frames and run on the audio thread
 from __future__ import annotations
 
 import ctypes
+import struct
 from collections import deque
 from collections.abc import Callable
 
@@ -111,6 +112,31 @@ class _PowerStatus(ctypes.Structure):
     _fields_ = [("ACLineStatus", ctypes.c_ubyte), ("BatteryFlag", ctypes.c_ubyte),
                 ("BatteryLifePercent", ctypes.c_ubyte), ("SystemStatusFlag", ctypes.c_ubyte),
                 ("BatteryLifeTime", ctypes.c_ulong), ("BatteryFullLifeTime", ctypes.c_ulong)]
+
+
+WTS_SESSION_INFO_EX = 25
+WTS_SESSIONSTATE_LOCK = 0
+
+
+def session_locked() -> bool:
+    """True while the Windows session is locked: nothing spoken to a locked PC should be acted on.
+    (The lock screen runs on the normal desktop, so the session's own lock flag is what tells.)"""
+    try:
+        kernel32, wtsapi32 = ctypes.windll.kernel32, ctypes.windll.wtsapi32
+    except AttributeError:
+        return False
+    session = ctypes.c_ulong()
+    kernel32.ProcessIdToSessionId(kernel32.GetCurrentProcessId(), ctypes.byref(session))
+    buffer, size = ctypes.c_void_p(), ctypes.c_ulong()
+    if not wtsapi32.WTSQuerySessionInformationW(None, session.value, WTS_SESSION_INFO_EX, ctypes.byref(buffer),
+                                                ctypes.byref(size)):
+        return False
+    try:
+        # WTSINFOEXW: DWORD Level, then (8-byte aligned) WTSINFOEX_LEVEL1_W: SessionId, SessionState, SessionFlags
+        _level, _session_id, _state, flags = struct.unpack_from("<I4xIii", ctypes.string_at(buffer, size.value))
+        return flags == WTS_SESSIONSTATE_LOCK
+    finally:
+        wtsapi32.WTSFreeMemory(buffer)
 
 
 def battery_saver_on() -> bool:

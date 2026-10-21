@@ -46,6 +46,8 @@ processes, and the message on the first one.
   triggering on the name Mark.
 - This laptop is often in battery saver mode, where hands-free listening rests (Hark now says so once).
   If you'd rather it kept listening, that can become a setting.
+- Hands-free does nothing while the PC is locked (checked against the real lock screen). Still to confirm
+  once you're back: that it resumes after you unlock.
 - Still needed: a try with your own voice and accent.
 
 **Goal.** Say "Hey Hark, open Spotify" without touching a key. Off by default; turned on in Settings.
